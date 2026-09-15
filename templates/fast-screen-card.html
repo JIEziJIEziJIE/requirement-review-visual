@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>需求快筛达标卡</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 24px; background:#FAFAF8; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; color:#2C2C2A; }
+  .wrap { max-width:900px; margin:0 auto; }
+  .head { background:#fff; border:0.5px solid #E3E2DC; border-radius:12px; padding:20px 24px; margin-bottom:16px; }
+  .kicker { font-size:12px; color:#5F5E5A; letter-spacing:.5px; margin-bottom:6px; }
+  h1 { font-size:19px; font-weight:500; margin:0 0 12px; line-height:1.4; }
+  .meta { font-size:12px; color:#5F5E5A; line-height:1.9; }
+  .verdict { margin-top:14px; padding:12px 16px; border-radius:8px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .v-pass { background:#E1F5EE; } .v-warn { background:#FAEEDA; } .v-fail { background:#FCEBEB; }
+  .verdict .label { font-size:15px; font-weight:500; }
+  .v-pass .label { color:#0F6E56; } .v-warn .label { color:#854F0B; } .v-fail .label { color:#A32D2D; }
+  .chips { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; }
+  .chip { font-size:12px; padding:3px 10px; border-radius:999px; background:#fff; border:0.5px solid rgba(0,0,0,.12); color:#444441; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:12px; margin-bottom:16px; }
+  .card { background:#fff; border:0.5px solid #E3E2DC; border-radius:10px; padding:14px 16px; border-left:3px solid #B4B2A9; }
+  .card.s-ok { border-left-color:#1D9E75; } .card.s-part { border-left-color:#BA7517; } .card.s-no { border-left-color:#E24B4A; } .card.s-na { border-left-color:#B4B2A9; }
+  .card .top { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .num { width:20px; height:20px; border-radius:50%; background:#F1EFE8; color:#5F5E5A; font-size:11px; display:flex; align-items:center; justify-content:center; flex:none; }
+  .name { font-size:14px; font-weight:500; }
+  .badge { margin-left:auto; font-size:11px; padding:2px 8px; border-radius:4px; flex:none; }
+  .b-ok { background:#E1F5EE; color:#0F6E56; } .b-part { background:#FAEEDA; color:#854F0B; } .b-no { background:#FCEBEB; color:#A32D2D; } .b-na { background:#F1EFE8; color:#5F5E5A; }
+  .line { font-size:12px; color:#5F5E5A; line-height:1.7; }
+  .line b { font-weight:500; color:#444441; }
+  .panel { background:#fff; border:0.5px solid #E3E2DC; border-radius:12px; padding:18px 24px; margin-bottom:16px; }
+  .panel h2 { font-size:14px; font-weight:500; margin:0 0 12px; }
+  .todo { display:flex; gap:10px; padding:9px 0; border-top:0.5px solid #F1EFE8; font-size:13px; line-height:1.6; }
+  .todo:first-of-type { border-top:none; }
+  .lv { font-size:11px; padding:2px 8px; border-radius:4px; height:fit-content; flex:none; }
+  .lv-p0 { background:#FCEBEB; color:#A32D2D; } .lv-p1 { background:#FAEEDA; color:#854F0B; } .lv-p2 { background:#F1EFE8; color:#5F5E5A; }
+  .foot { font-size:11px; color:#888780; line-height:1.8; padding:0 4px; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:#5F5E5A; margin-bottom:14px; }
+  .legend span { display:flex; align-items:center; gap:5px; }
+  .dot { width:9px; height:9px; border-radius:2px; }
+  @media print { body { background:#fff; padding:0; } .wrap { max-width:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="kicker">一级快筛 · 8 项最小标准达标卡</div>
+    <h1 id="t"></h1>
+    <div class="meta" id="m"></div>
+    <div class="verdict" id="v">
+      <span class="label" id="vl"></span>
+      <div class="chips" id="vc"></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot" style="background:#1D9E75"></i>已明确</span>
+    <span><i class="dot" style="background:#BA7517"></i>部分明确</span>
+    <span><i class="dot" style="background:#E24B4A"></i>未明确</span>
+    <span><i class="dot" style="background:#B4B2A9"></i>不适用</span>
+  </div>
+
+  <div class="grid" id="g"></div>
+
+  <div class="panel">
+    <h2>待确认事项</h2>
+    <div id="td"></div>
+  </div>
+
+  <div class="foot" id="f"></div>
+</div>
+
+<script>
+/* ============ 只需修改以下数据区 ============ */
+const DATA = {
+  title: "需求快筛｜示例需求",
+  date: "2026-09-13",
+  goal: "判断是否初步可测",
+  role: "测试",
+  reviewer: "",
+  verdict: "补充确认后可测",
+  level: "warn",            // pass / warn / fail
+  rate: "5/8",              // 已明确项 / 计入项
+  items: [
+    { name:"目标与范围",         status:"已明确",   evidence:"第2章", advice:"" },
+    { name:"主流程与完成标准",   status:"已明确",   evidence:"流程图P3", advice:"" },
+    { name:"业务规则与关键数据", status:"部分明确", evidence:"3.2 价格说明", advice:"明确满减计算顺序" },
+    { name:"角色、权限与前置条件",status:"未明确",  evidence:"仅写需要登录", advice:"区分各角色可见范围" },
+    { name:"异常与边界",         status:"未明确",   evidence:"无异常章节", advice:"补接口失败与重试规则" },
+    { name:"状态与数据一致性",   status:"部分明确", evidence:"订单状态表缺失", advice:"补状态流转与触发者" },
+    { name:"依赖与交付条件",     status:"已明确",   evidence:"接口清单V2", advice:"" },
+    { name:"验收与可追溯证据",   status:"已明确",   evidence:"验收章节", advice:"" }
+  ],
+  todos: [
+    { level:"P0", text:"Q1 明确不同角色可见范围与操作权限 — 确认对象：产品" },
+    { level:"P1", text:"Q2 补充接口失败、超时、重试规则 — 确认对象：后端" },
+    { level:"P2", text:"Q3 明确满减计算顺序与小数位 — 确认对象：产品" }
+  ],
+  note: "本卡由「需求审查可视化版」一级快筛生成，结论与同名 Markdown 报告一致；二级深审需另出 12 维雷达图。"
+};
+/* ============ 数据区结束 ============ */
+
+const MAP = {
+  "已明确":   { c:"s-ok",   b:"b-ok"   },
+  "部分明确": { c:"s-part", b:"b-part" },
+  "未明确":   { c:"s-no",   b:"b-no"   },
+  "不适用":   { c:"s-na",   b:"b-na"   }
+};
+const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({
+  "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+})[ch]);
+const cnt = {};
+DATA.items.forEach(i => cnt[i.status] = (cnt[i.status]||0)+1);
+
+document.getElementById("t").textContent = DATA.title;
+document.getElementById("m").innerHTML =
+  "评审日期：" + esc(DATA.date) + " ｜ 评审目标：" + esc(DATA.goal) + " ｜ 本轮身份：" + esc(DATA.role) +
+  (DATA.reviewer ? " ｜ 审查人：" + esc(DATA.reviewer) : "") + "<br>达标情况：" + esc(DATA.rate) +
+  " ｜ 已明确 " + (cnt["已明确"]||0) + " 项 ｜ 部分明确 " + (cnt["部分明确"]||0) +
+  " 项 ｜ 未明确 " + (cnt["未明确"]||0) + " 项 ｜ 不适用 " + (cnt["不适用"]||0) + " 项";
+
+const v = document.getElementById("v");
+v.className = "verdict v-" + DATA.level;
+document.getElementById("vl").textContent = DATA.verdict;
+document.getElementById("vc").innerHTML =
+  '<span class="chip">P0 ' + DATA.todos.filter(t=>t.level==="P0").length + ' 项</span>' +
+  '<span class="chip">P1 ' + DATA.todos.filter(t=>t.level==="P1").length + ' 项</span>' +
+  '<span class="chip">P2 ' + DATA.todos.filter(t=>t.level==="P2").length + ' 项</span>' +
+  '<span class="chip">达标率 ' + esc(DATA.rate) + '</span>';
+
+document.getElementById("g").innerHTML = DATA.items.map((i,n) => {
+  const s = MAP[i.status] || MAP["不适用"];
+  return '<div class="card ' + s.c + '">' +
+    '<div class="top"><span class="num">' + (n+1) + '</span><span class="name">' + esc(i.name) +
+    '</span><span class="badge ' + s.b + '">' + esc(i.status) + '</span></div>' +
+    '<div class="line"><b>依据</b>：' + esc(i.evidence || "—") + '</div>' +
+    (i.advice ? '<div class="line"><b>建议明确</b>：' + esc(i.advice) + '</div>' : "") +
+  '</div>';
+}).join("");
+
+document.getElementById("td").innerHTML = DATA.todos.length
+  ? DATA.todos.map(t => '<div class="todo"><span class="lv lv-' + esc(t.level.toLowerCase()) + '">' + esc(t.level) +
+      '</span><span>' + esc(t.text) + '</span></div>').join("")
+  : '<div class="todo"><span>当前材料未发现关键缺口</span></div>';
+
+document.getElementById("f").textContent = DATA.note;
+</script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>需求可测性雷达图</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 24px; background:#FAFAF8; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; color:#2C2C2A; }
+  .wrap { max-width:900px; margin:0 auto; }
+  .head { background:#fff; border:0.5px solid #E3E2DC; border-radius:12px; padding:20px 24px; margin-bottom:16px; display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+  .head h1 { font-size:19px; font-weight:500; margin:0 0 10px; line-height:1.4; }
+  .meta { font-size:12px; color:#5F5E5A; line-height:1.9; }
+  .score { margin-left:auto; text-align:center; flex:none; padding-left:20px; border-left:0.5px solid #EDEDE8; }
+  .score .n { font-size:38px; font-weight:500; line-height:1; }
+  .score .l { font-size:11px; color:#888780; margin-top:6px; }
+  .v-pass .n { color:#0F6E56; } .v-warn .n { color:#854F0B; } .v-fail .n { color:#A32D2D; }
+  .verdict { margin-bottom:16px; padding:12px 16px; border-radius:8px; font-size:14px; font-weight:500; }
+  .v-pass { background:#E1F5EE; color:#0F6E56; } .v-warn { background:#FAEEDA; color:#854F0B; } .v-fail { background:#FCEBEB; color:#A32D2D; }
+  .panel { background:#fff; border:0.5px solid #E3E2DC; border-radius:12px; padding:18px 24px; margin-bottom:16px; }
+  .panel h2 { font-size:14px; font-weight:500; margin:0 0 6px; }
+  .hint { font-size:11px; color:#888780; margin-bottom:10px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:0.5px solid #F1EFE8; }
+  th { color:#888780; font-weight:500; font-size:11px; }
+  td.c { text-align:center; }
+  .tag { font-size:11px; padding:2px 8px; border-radius:4px; }
+  .t-ok { background:#E1F5EE; color:#0F6E56; } .t-mid { background:#E1F5EE; color:#0F6E56; }
+  .t-part { background:#FAEEDA; color:#854F0B; } .t-no { background:#FCEBEB; color:#A32D2D; } .t-na { background:#F1EFE8; color:#5F5E5A; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .chip { font-size:12px; padding:3px 10px; border-radius:999px; background:#F7F7F5; border:0.5px solid rgba(0,0,0,.08); color:#444441; }
+  .todo { display:flex; gap:10px; padding:9px 0; border-top:0.5px solid #F1EFE8; font-size:13px; line-height:1.6; }
+  .todo:first-of-type { border-top:none; }
+  .lv { font-size:11px; padding:2px 8px; border-radius:4px; height:fit-content; flex:none; }
+  .lv-p0 { background:#FCEBEB; color:#A32D2D; } .lv-p1 { background:#FAEEDA; color:#854F0B; } .lv-p2 { background:#F1EFE8; color:#5F5E5A; }
+  .foot { font-size:11px; color:#888780; line-height:1.8; padding:0 4px; }
+  @media print { body { background:#fff; padding:0; } .wrap { max-width:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1 id="t"></h1>
+      <div class="meta" id="m"></div>
+    </div>
+    <div class="score" id="sc">
+      <div class="n" id="sn"></div>
+      <div class="l">综合可测性指数</div>
+    </div>
+  </div>
+
+  <div class="verdict" id="v"></div>
+
+  <div class="panel">
+    <h2>12 维可测性雷达</h2>
+    <div class="hint" id="hint"></div>
+    <div id="chart"></div>
+  </div>
+
+  <div class="panel">
+    <h2>维度明细</h2>
+    <table>
+      <thead><tr><th style="width:32px">#</th><th>维度</th><th class="c">成熟度</th><th class="c">分值</th><th>主要影响</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>建议与待确认</h2>
+    <div class="chips" id="cp"></div>
+    <div id="td"></div>
+  </div>
+
+  <div class="foot" id="f"></div>
+</div>
+
+<script>
+/* ============ 只需修改以下数据区 ============ */
+const DATA = {
+  title: "需求可测性审查｜示例需求",
+  date: "2026-09-13",
+  source: "本地文件 + 原型链接",
+  score: 72,
+  verdict: "补充确认后可支持用例设计",
+  level: "warn",              // pass / warn / fail
+  dims: [
+    { short:"目标范围",  name:"目标、范围与成功标准",        value:100, status:"已明确",   note:"" },
+    { short:"术语口径",  name:"术语、文案与规则口径",        value:75,  status:"基本明确", note:"活动时间两处表述不一致" },
+    { short:"权限前置",  name:"角色、权限与前置条件",        value:15,  status:"未明确",   note:"P0：未说明各角色可见范围" },
+    { short:"主流程",    name:"主流程与业务规则",            value:75,  status:"基本明确", note:"" },
+    { short:"边界精度",  name:"边界、容量与精度",            value:45,  status:"部分明确", note:"P1：金额小数位与上限未定" },
+    { short:"异常恢复",  name:"异常、失败与可恢复性",        value:15,  status:"未明确",   note:"P0：支付失败无回滚规则" },
+    { short:"状态一致",  name:"状态流转与数据一致性",        value:45,  status:"部分明确", note:"P1：订单状态无终态定义" },
+    { short:"数据接口",  name:"数据结构、输入输出与接口",    value:75,  status:"基本明确", note:"" },
+    { short:"兼容非功能",name:"兼容性与非功能要求",          value:null,status:"不适用",   note:"本次范围不涉及" },
+    { short:"交互视觉",  name:"页面、交互与视觉状态",        value:100, status:"已明确",   note:"" },
+    { short:"依赖发布",  name:"外部依赖、运营配置与发布窗口",value:45,  status:"部分明确", note:"P1：联调时间未定" },
+    { short:"验收观测",  name:"验收、回归与可观测性",        value:75,  status:"基本明确", note:"" }
+  ],
+  priorities: { p0:2, p1:3, p2:2, p3:1 },
+  todos: [
+    { level:"P0", text:"明确各角色可见范围与操作权限，确认对象：产品" },
+    { level:"P0", text:"补充支付失败后的回滚与补偿规则，确认对象：后端" },
+    { level:"P1", text:"明确金额小数位与单笔上限，确认对象：产品、财务" }
+  ],
+  note: "本图由「需求审查可视化版」二级深审生成，不适用维度不计入综合指数；结论与同名 Markdown 报告一致。"
+};
+/* ============ 数据区结束 ============ */
+
+const COLORS = { pass:["#1D9E75","#0F6E56"], warn:["#BA7517","#854F0B"], fail:["#E24B4A","#A32D2D"] }[DATA.level] || ["#378ADD","#185FA5"];
+const STAG = { "已明确":"t-ok", "基本明确":"t-mid", "部分明确":"t-part", "未明确":"t-no", "不适用":"t-na" };
+const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({
+  "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+})[ch]);
+const N = DATA.dims.length, CX = 320, CY = 268, R = 168;
+const ang = i => (Math.PI * 2 * i / N) - Math.PI / 2;
+const pt = (i, r) => [CX + Math.cos(ang(i)) * r, CY + Math.sin(ang(i)) * r];
+
+const used = DATA.dims.filter(d => d.value !== null);
+const avg = used.length ? Math.round(used.reduce((s, d) => s + d.value, 0) / used.length) : 0;
+
+document.getElementById("t").textContent = DATA.title;
+document.getElementById("m").innerHTML =
+  "审查日期：" + esc(DATA.date) + " ｜ 门禁级别：二级深审<br>材料来源：" + esc(DATA.source) +
+  " ｜ 计入维度：" + used.length + "/" + N + "（不适用 " + (N - used.length) + " 项不计入）";
+document.getElementById("sn").textContent = DATA.score;
+document.getElementById("sc").className = "score v-" + DATA.level;
+document.getElementById("v").className = "verdict v-" + DATA.level;
+document.getElementById("v").textContent = DATA.verdict +
+  " ｜ P0 " + DATA.priorities.p0 + " 项 ｜ P1 " + DATA.priorities.p1 + " 项 ｜ P2 " + DATA.priorities.p2 + " 项 ｜ P3 " + DATA.priorities.p3 + " 项";
+document.getElementById("hint").textContent =
+  "外圈 100 分，内圈 0 分；灰色轴为不适用维度，不参与综合指数计算。当前计入均值 " + avg + " 分。";
+
+let svg = '<svg viewBox="0 0 640 540" width="100%" role="img" aria-label="12 维需求可测性雷达图，综合指数 ' + DATA.score + '">';
+[20,40,60,80,100].forEach(lv => {
+  const p = DATA.dims.map((d,i) => pt(i, R * lv / 100).join(",")).join(" ");
+  svg += '<polygon points="' + p + '" fill="' + (lv === 100 ? "#FFFFFF" : "none") + '" stroke="#E3E2DC" stroke-width="0.5"/>';
+});
+DATA.dims.forEach((d,i) => {
+  const [x,y] = pt(i, R);
+  svg += '<line x1="' + CX + '" y1="' + CY + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) +
+         '" stroke="' + (d.value === null ? "#DDDBD3" : "#E3E2DC") + '" stroke-width="0.5"/>';
+});
+const poly = used.map(d => pt(DATA.dims.indexOf(d), R * d.value / 100).join(",")).join(" ");
+svg += '<polygon points="' + poly + '" fill="' + COLORS[0] + '" fill-opacity="0.18" stroke="' + COLORS[1] + '" stroke-width="1.5"/>';
+used.forEach(d => {
+  const [x,y] = pt(DATA.dims.indexOf(d), R * d.value / 100);
+  svg += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3.2" fill="' + COLORS[1] + '"/>';
+});
+DATA.dims.forEach((d,i) => {
+  const [x,y] = pt(i, R + 30);
+  const c = Math.cos(ang(i));
+  const anchor = c > 0.25 ? "start" : (c < -0.25 ? "end" : "middle");
+  svg += '<text x="' + x.toFixed(1) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="' + anchor +
+         '" font-size="12" fill="' + (d.value === null ? "#A8A69E" : "#444441") + '">' +
+         esc(d.short) + (d.value === null ? "（不适用）" : "") + '</text>';
+});
+svg += '<text x="' + CX + '" y="' + (CY + 5) + '" text-anchor="middle" font-size="11" fill="#A8A69E">' + DATA.score + '</text>';
+svg += "</svg>";
+document.getElementById("chart").innerHTML = svg;
+
+document.getElementById("tb").innerHTML = DATA.dims.map((d,i) =>
+  '<tr><td>' + (i+1) + '</td><td>' + esc(d.name) + '</td><td class="c"><span class="tag ' + (STAG[d.status]||"t-na") + '">' +
+  esc(d.status) + '</span></td><td class="c">' + (d.value === null ? "—" : d.value) + '</td><td>' + esc(d.note || "—") + '</td></tr>'
+).join("");
+
+document.getElementById("cp").innerHTML =
+  '<span class="chip">建议总数 ' + (DATA.priorities.p0 + DATA.priorities.p1 + DATA.priorities.p2 + DATA.priorities.p3) + ' 项</span>' +
+  '<span class="chip">P0 ' + DATA.priorities.p0 + '</span><span class="chip">P1 ' + DATA.priorities.p1 +
+  '</span><span class="chip">P2 ' + DATA.priorities.p2 + '</span><span class="chip">P3 ' + DATA.priorities.p3 + '</span>';
+document.getElementById("td").innerHTML = DATA.todos.length
+  ? DATA.todos.map(t => '<div class="todo"><span class="lv lv-' + esc(t.level.toLowerCase()) + '">' + esc(t.level) + '</span><span>' + esc(t.text) + '</span></div>').join("")
+  : '<div class="todo"><span>当前材料未发现需要补充之处</span></div>';
+document.getElementById("f").textContent = DATA.note;
+</script>
+</body>
+</html>
