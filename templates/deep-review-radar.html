@@ -1,178 +1,511 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>需求可测性雷达图</title>
-<style>
-  * { box-sizing: border-box; }
-  body { margin:0; padding:32px 24px; background:#FAFAF8; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; color:#2C2C2A; }
-  .wrap { max-width:900px; margin:0 auto; }
-  .head { background:#fff; border:0.5px solid #E3E2DC; border-radius:12px; padding:20px 24px; margin-bottom:16px; display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
-  .head h1 { font-size:19px; font-weight:500; margin:0 0 10px; line-height:1.4; }
-  .meta { font-size:12px; color:#5F5E5A; line-height:1.9; }
-  .score { margin-left:auto; text-align:center; flex:none; padding-left:20px; border-left:0.5px solid #EDEDE8; }
-  .score .n { font-size:38px; font-weight:500; line-height:1; }
-  .score .l { font-size:11px; color:#888780; margin-top:6px; }
-  .v-pass .n { color:#0F6E56; } .v-warn .n { color:#854F0B; } .v-fail .n { color:#A32D2D; }
-  .verdict { margin-bottom:16px; padding:12px 16px; border-radius:8px; font-size:14px; font-weight:500; }
-  .v-pass { background:#E1F5EE; color:#0F6E56; } .v-warn { background:#FAEEDA; color:#854F0B; } .v-fail { background:#FCEBEB; color:#A32D2D; }
-  .panel { background:#fff; border:0.5px solid #E3E2DC; border-radius:12px; padding:18px 24px; margin-bottom:16px; }
-  .panel h2 { font-size:14px; font-weight:500; margin:0 0 6px; }
-  .hint { font-size:11px; color:#888780; margin-bottom:10px; }
-  table { width:100%; border-collapse:collapse; font-size:12px; }
-  th, td { text-align:left; padding:7px 8px; border-bottom:0.5px solid #F1EFE8; }
-  th { color:#888780; font-weight:500; font-size:11px; }
-  td.c { text-align:center; }
-  .tag { font-size:11px; padding:2px 8px; border-radius:4px; }
-  .t-ok { background:#E1F5EE; color:#0F6E56; } .t-mid { background:#E1F5EE; color:#0F6E56; }
-  .t-part { background:#FAEEDA; color:#854F0B; } .t-no { background:#FCEBEB; color:#A32D2D; } .t-na { background:#F1EFE8; color:#5F5E5A; }
-  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-  .chip { font-size:12px; padding:3px 10px; border-radius:999px; background:#F7F7F5; border:0.5px solid rgba(0,0,0,.08); color:#444441; }
-  .todo { display:flex; gap:10px; padding:9px 0; border-top:0.5px solid #F1EFE8; font-size:13px; line-height:1.6; }
-  .todo:first-of-type { border-top:none; }
-  .lv { font-size:11px; padding:2px 8px; border-radius:4px; height:fit-content; flex:none; }
-  .lv-p0 { background:#FCEBEB; color:#A32D2D; } .lv-p1 { background:#FAEEDA; color:#854F0B; } .lv-p2 { background:#F1EFE8; color:#5F5E5A; }
-  .foot { font-size:11px; color:#888780; line-height:1.8; padding:0 4px; }
-  @media print { body { background:#fff; padding:0; } .wrap { max-width:none; } }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="head">
-    <div>
-      <h1 id="t"></h1>
-      <div class="meta" id="m"></div>
-    </div>
-    <div class="score" id="sc">
-      <div class="n" id="sn"></div>
-      <div class="l">综合可测性指数</div>
-    </div>
-  </div>
-
-  <div class="verdict" id="v"></div>
-
-  <div class="panel">
-    <h2>12 维可测性雷达</h2>
-    <div class="hint" id="hint"></div>
-    <div id="chart"></div>
-  </div>
-
-  <div class="panel">
-    <h2>维度明细</h2>
-    <table>
-      <thead><tr><th style="width:32px">#</th><th>维度</th><th class="c">成熟度</th><th class="c">分值</th><th>主要影响</th></tr></thead>
-      <tbody id="tb"></tbody>
-    </table>
-  </div>
-
-  <div class="panel">
-    <h2>建议与待确认</h2>
-    <div class="chips" id="cp"></div>
-    <div id="td"></div>
-  </div>
-
-  <div class="foot" id="f"></div>
-</div>
-
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"><link rel="icon" href="data:,"><title>Requirement review · v2.4.0</title><style>
+*{box-sizing:border-box}body{margin:0;padding:28px 20px;background:#fafaf8;color:#2c2c2a;font-family:system-ui,"Microsoft YaHei",sans-serif;font-size:14px;line-height:1.65}main{max-width:1000px;margin:auto}.panel{background:white;border:1px solid #e3e2dc;border-radius:12px;padding:22px;margin-bottom:16px}h1{font-size:25px;line-height:1.4;margin:8px 0}h2{font-size:18px;margin:10px 0}h3{font-size:15px;margin:6px 0}p{margin:8px 0;overflow-wrap:anywhere}.eyebrow,.muted{font-size:12px;color:#60605b}.verdict{padding:12px 16px;border-radius:8px}.pass{background:#e1f5ee;color:#0f6e56}.warn{background:#faeeda;color:#854f0b}.fail,.error{background:#fcebee;color:#a32d2d}.unknown{background:#f1efe8;color:#5f5e5a}.chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.chip{border:1px solid #ddd;border-radius:18px;padding:2px 10px;font-size:12px}.finding{border-top:1px solid #eee;padding:16px 0}.answer{color:#0f6e56}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}.check{border:1px solid #e3e2dc;border-radius:8px;padding:14px}.badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:12px}summary{cursor:pointer;font-weight:500}details p{font-size:13px}svg{display:block;width:100%;max-width:760px;margin:0 auto}.metric{font-size:14px}footer{padding:0 8px}@media print{body{background:white;padding:0}.panel{break-inside:auto}.finding,.check{break-inside:avoid}details>*{display:block!important}summary{display:block}.grid{grid-template-columns:1fr 1fr}}@media(max-width:500px){body{padding:12px}.panel{padding:16px}h1{font-size:22px}}
+</style></head><body><main id="review"></main><noscript>需要启用 JavaScript 查看本地报告 / Enable JavaScript to view this offline report.</noscript>
+<script type="application/json" id="review-data">{
+  "schemaVersion": 2,
+  "kind": "deep",
+  "lane": "test",
+  "lang": "zh",
+  "title": "需求可测性审查｜会议室预约（虚构示例）",
+  "date": "2026-10-19",
+  "reportId": "DEMO-DEEP",
+  "revision": 1,
+  "materialVersion": "虚构需求 v1",
+  "top": 3,
+  "materials": [
+    {
+      "name": "会议室预约需求（完全虚构）",
+      "source": "内置示例文本",
+      "version": "v1",
+      "state": "已读全文",
+      "role": "主需求"
+    }
+  ],
+  "checks": [
+    {
+      "id": 1,
+      "name": "目标、范围与成功标准",
+      "short": "目标范围",
+      "status": "已明确",
+      "evidence": "虚构需求第 1 节",
+      "advice": ""
+    },
+    {
+      "id": 2,
+      "name": "术语、文案与规则口径",
+      "short": "术语口径",
+      "status": "基本明确",
+      "evidence": "虚构需求第 2 节",
+      "advice": ""
+    },
+    {
+      "id": 3,
+      "name": "角色、权限与前置条件",
+      "short": "权限前置",
+      "status": "未明确",
+      "evidence": "虚构需求第 3 节",
+      "advice": ""
+    },
+    {
+      "id": 4,
+      "name": "主流程与业务规则",
+      "short": "主流程",
+      "status": "基本明确",
+      "evidence": "虚构需求第 4 节",
+      "advice": ""
+    },
+    {
+      "id": 5,
+      "name": "边界、容量与精度",
+      "short": "边界精度",
+      "status": "部分明确",
+      "evidence": "虚构需求第 5 节",
+      "advice": ""
+    },
+    {
+      "id": 6,
+      "name": "异常、失败与可恢复性",
+      "short": "异常恢复",
+      "status": "未明确",
+      "evidence": "虚构需求第 6 节",
+      "advice": ""
+    },
+    {
+      "id": 7,
+      "name": "状态流转与数据一致性",
+      "short": "状态一致",
+      "status": "部分明确",
+      "evidence": "虚构需求第 7 节",
+      "advice": ""
+    },
+    {
+      "id": 8,
+      "name": "数据结构、输入输出与接口",
+      "short": "数据接口",
+      "status": "基本明确",
+      "evidence": "虚构需求第 8 节",
+      "advice": ""
+    },
+    {
+      "id": 9,
+      "name": "兼容性与非功能要求",
+      "short": "兼容要求",
+      "status": "不适用",
+      "evidence": "本示例只检查规则文本，非功能要求不在此演示范围；真实项目须按实际范围判断。",
+      "advice": ""
+    },
+    {
+      "id": 10,
+      "name": "页面、交互与视觉状态",
+      "short": "交互视觉",
+      "status": "已明确",
+      "evidence": "虚构需求第 10 节",
+      "advice": ""
+    },
+    {
+      "id": 11,
+      "name": "外部依赖、运营配置与发布窗口",
+      "short": "依赖发布",
+      "status": "部分明确",
+      "evidence": "虚构需求第 11 节",
+      "advice": ""
+    },
+    {
+      "id": 12,
+      "name": "验收、回归与可观测性",
+      "short": "验收证据",
+      "status": "基本明确",
+      "evidence": "虚构需求第 12 节",
+      "advice": ""
+    }
+  ],
+  "findings": [
+    {
+      "id": "建议 001",
+      "priority": "P0",
+      "impact": "fill_rule",
+      "title": "重复提交与权限结果",
+      "type": "业务规则",
+      "owner": "产品、研发",
+      "location": "虚构需求“异常处理”章节",
+      "evidence": "虚构需求只描述预约成功，未覆盖本事项",
+      "fact": "没有说明“重复提交与权限结果”的结果",
+      "advice": "补充已确认的业务结果；研发实现另行确认，不预设答案。",
+      "testImpact": "目前无法确定该场景应该显示什么、产生几条记录。",
+      "affected": [
+        3,
+        6
+      ],
+      "business": {
+        "required": true,
+        "question": "不同身份重复点击“预约”时，应允许哪些操作、保留几条记录？",
+        "answer": "",
+        "source": ""
+      },
+      "technical": {
+        "required": true,
+        "question": "按业务确认的结果，如何防止同一预约被重复处理？",
+        "answer": "",
+        "source": ""
+      },
+      "document": {
+        "status": "未写入",
+        "evidence": ""
+      },
+      "verification": {
+        "status": "未验证",
+        "evidence": ""
+      }
+    },
+    {
+      "id": "建议 002",
+      "priority": "P1",
+      "impact": "fill_rule",
+      "title": "预约边界与生效时机",
+      "type": "业务规则",
+      "owner": "产品、研发",
+      "location": "虚构需求“异常处理”章节",
+      "evidence": "虚构需求只描述预约成功，未覆盖本事项",
+      "fact": "没有说明“预约边界与生效时机”的结果",
+      "advice": "补充已确认的业务结果；研发实现另行确认，不预设答案。",
+      "testImpact": "目前无法确定该场景应该显示什么、产生几条记录。",
+      "affected": [
+        5,
+        7,
+        11
+      ],
+      "business": {
+        "required": true,
+        "question": "预约时段边界如何计算，修改后何时生效，依赖何时可用？",
+        "answer": "",
+        "source": ""
+      },
+      "technical": {
+        "required": false,
+        "question": "",
+        "answer": "",
+        "source": ""
+      },
+      "document": {
+        "status": "未写入",
+        "evidence": ""
+      },
+      "verification": {
+        "status": "未验证",
+        "evidence": ""
+      }
+    },
+    {
+      "id": "建议 003",
+      "priority": "P2",
+      "impact": "fill_rule",
+      "title": "文案与验收示例",
+      "type": "业务规则",
+      "owner": "产品、研发",
+      "location": "虚构需求“异常处理”章节",
+      "evidence": "虚构需求只描述预约成功，未覆盖本事项",
+      "fact": "没有说明“文案与验收示例”的结果",
+      "advice": "补充已确认的业务结果；研发实现另行确认，不预设答案。",
+      "testImpact": "目前无法确定该场景应该显示什么、产生几条记录。",
+      "affected": [
+        2,
+        4,
+        8,
+        12
+      ],
+      "business": {
+        "required": true,
+        "question": "已确定的业务规则是否可以补上统一术语和可对照的示例？",
+        "answer": "",
+        "source": ""
+      },
+      "technical": {
+        "required": false,
+        "question": "",
+        "answer": "",
+        "source": ""
+      },
+      "document": {
+        "status": "未写入",
+        "evidence": ""
+      },
+      "verification": {
+        "status": "未验证",
+        "evidence": ""
+      }
+    }
+  ],
+  "changes": [
+    "初次审查；没有编辑需求文件，也没有执行功能测试。"
+  ],
+  "acceptanceEvidence": [
+    "正常主流程：成功预约后的页面和记录示例（待提供）",
+    "边界与时间：起止时刻的预期结果（待确认）",
+    "异常与恢复：重复点击后的结果（待确认）",
+    "权限与数据隔离：不同身份的可见范围（待确认）",
+    "页面状态：处理中、成功、失败的显示（待提供）",
+    "后台记录：用于核对预约数量的证据（待提供）"
+  ]
+}</script>
 <script>
-/* ============ 只需修改以下数据区 ============ */
-const DATA = {
-  title: "需求可测性审查｜示例需求",
-  date: "2026-09-13",
-  source: "本地文件 + 原型链接",
-  score: 72,
-  verdict: "补充确认后可支持用例设计",
-  level: "warn",              // pass / warn / fail
-  dims: [
-    { short:"目标范围",  name:"目标、范围与成功标准",        value:100, status:"已明确",   note:"" },
-    { short:"术语口径",  name:"术语、文案与规则口径",        value:75,  status:"基本明确", note:"活动时间两处表述不一致" },
-    { short:"权限前置",  name:"角色、权限与前置条件",        value:15,  status:"未明确",   note:"P0：未说明各角色可见范围" },
-    { short:"主流程",    name:"主流程与业务规则",            value:75,  status:"基本明确", note:"" },
-    { short:"边界精度",  name:"边界、容量与精度",            value:45,  status:"部分明确", note:"P1：金额小数位与上限未定" },
-    { short:"异常恢复",  name:"异常、失败与可恢复性",        value:15,  status:"未明确",   note:"P0：支付失败无回滚规则" },
-    { short:"状态一致",  name:"状态流转与数据一致性",        value:45,  status:"部分明确", note:"P1：订单状态无终态定义" },
-    { short:"数据接口",  name:"数据结构、输入输出与接口",    value:75,  status:"基本明确", note:"" },
-    { short:"兼容非功能",name:"兼容性与非功能要求",          value:null,status:"不适用",   note:"本次范围不涉及" },
-    { short:"交互视觉",  name:"页面、交互与视觉状态",        value:100, status:"已明确",   note:"" },
-    { short:"依赖发布",  name:"外部依赖、运营配置与发布窗口",value:45,  status:"部分明确", note:"P1：联调时间未定" },
-    { short:"验收观测",  name:"验收、回归与可观测性",        value:75,  status:"基本明确", note:"" }
-  ],
-  priorities: { p0:2, p1:3, p2:2, p3:1 },
-  todos: [
-    { level:"P0", text:"明确各角色可见范围与操作权限，确认对象：产品" },
-    { level:"P0", text:"补充支付失败后的回滚与补偿规则，确认对象：后端" },
-    { level:"P1", text:"明确金额小数位与单笔上限，确认对象：产品、财务" }
-  ],
-  note: "本图由「需求审查可视化版」二级深审生成，不适用维度不计入综合指数；结论与同名 Markdown 报告一致。"
-};
-/* ============ 数据区结束 ============ */
+/* Shared calculation contract, embedded verbatim in offline HTML. No dependencies. */
+(function (root) {
+  "use strict";
+  const STATUS = { "已明确":100, "基本明确":75, "部分明确":45, "未明确":15, "不适用":null };
+  const PRIORITY = ["P0", "P1", "P2", "P3"];
+  const FAST = ["目标与范围", "主流程与完成标准", "业务规则与关键数据", "角色、权限与前置条件", "异常与边界", "状态与数据一致性", "依赖与交付条件", "验收与可追溯证据"];
+  const DEEP = ["目标、范围与成功标准", "术语、文案与规则口径", "角色、权限与前置条件", "主流程与业务规则", "边界、容量与精度", "异常、失败与可恢复性", "状态流转与数据一致性", "数据结构、输入输出与接口", "兼容性与非功能要求", "页面、交互与视觉状态", "外部依赖、运营配置与发布窗口", "验收、回归与可观测性"];
+  const text = v => typeof v === "string" && v.trim().length > 0;
+  const object = v => v !== null && typeof v === "object" && !Array.isArray(v);
+  function classify(kind, lane, count, average, applicable, impacts) {
+    if (!applicable) return { level:"unknown", verdict:"材料适用范围待确认，暂不判断" };
+    if (kind === "deep") {
+      if (count.P0 > 0 || average < 70) return { level:"fail", verdict:"需要先完成关键口径对齐" };
+      if (average >= 85 && count.P1 === 0) return { level:"pass", verdict:"当前材料可支持用例设计" };
+      return { level:"warn", verdict:"补充确认后可支持" };
+    }
+    const words = {
+      product:["可提交评审", "建议补充后提交", "暂不建议提交"],
+      dev:["可以进入开发", "补充确认后可以开发", "暂不建议直接开发"],
+      test:["具备初步可测条件", "补充确认后可测", "暂不具备初步可测条件"]
+    }[lane];
+    const fail = lane === "product" ? impacts.some(x => x === "rework" || x === "cannot_close") : count.P0 > 0;
+    const index = fail ? 2 : count.P0 > 0 || count.P1 > 0 ? 1 : 0;
+    return { level:["pass", "warn", "fail"][index], verdict:words[index] };
+  }
+  function compute(data) {
+    const errors = [];
+    const need = (ok, message) => { if (!ok) errors.push(message); };
+    if (!object(data)) return { ok:false, errors:["DATA 必须是对象"] };
+    need(data.schemaVersion === 2, "schemaVersion 必须为 2；旧数据需迁移");
+    need(["fast", "deep"].includes(data.kind), "kind 必须为 fast/deep");
+    need(["product", "dev", "test"].includes(data.lane), "lane 必须为 product/dev/test");
+    need(data.kind !== "deep" || data.lane === "test", "二级深审 lane 必须为 test；不覆盖产品/开发准入结论");
+    need(data.lang === undefined || ["zh", "en"].includes(data.lang), "lang 必须为 zh/en");
+    need(data.format === undefined || ["md+html", "md", "html"].includes(data.format), "format 必须为 md+html/md/html");
+    ["title", "date", "reportId", "materialVersion"].forEach(k => need(text(data[k]), k + " 不能为空"));
+    need(text(data.date) && /^\d{4}-\d{2}-\d{2}$/.test(data.date) && Number.isFinite(Date.parse(data.date)) && new Date(data.date).toISOString().slice(0,10) === data.date, "date 必须为有效 YYYY-MM-DD");
+    ["summary", "nextStepText"].forEach(k => need(data[k] === undefined || typeof data[k] === "string", k + " 必须为字符串"));
+    ["changes", "acceptanceEvidence"].forEach(k => need(data[k] === undefined || Array.isArray(data[k]) && data[k].every(text), k + " 必须为非空文本数组"));
+    need(Number.isInteger(data.revision) && data.revision > 0, "revision 必须为正整数");
+    const top = data.top === undefined ? 8 : data.top;
+    need(Number.isInteger(top) && top >= 1 && top <= 8, "top 必须为 1..8，只限制首屏展示");
+    ["rate", "score", "index", "level", "verdict", "priorities", "counts", "items", "dims", "todos"].forEach(k => need(!(k in data), "禁止手填派生或旧字段：" + k));
+    need(Array.isArray(data.materials) && data.materials.length > 0, "materials 必须提供材料及读取状态");
+    if (Array.isArray(data.materials)) data.materials.forEach((m, i) => {
+      need(object(m), "materials[" + i + "] 必须为对象");
+      if (!object(m)) return;
+      ["name", "source", "version", "role"].forEach(k => need(text(m[k]), "材料 " + (i + 1) + " 缺少 " + k));
+      need(["已读全文", "部分读取", "读取失败"].includes(m.state), "材料 " + (i + 1) + " 读取状态非法");
+    });
+    const names = data.kind === "fast" ? FAST : DEEP;
+    need(Array.isArray(data.checks) && data.checks.length === names.length, "checks 必须恰好 " + names.length + " 项");
+    const checks = Array.isArray(data.checks) ? data.checks : [];
+    checks.forEach((c, i) => {
+      need(object(c), "检查项 " + (i + 1) + " 必须为对象");
+      if (!object(c)) return;
+      need(c.id === i + 1, "检查项 id 必须按顺序为 1.." + names.length);
+      need(c.name === names[i], "检查项 " + (i + 1) + " 名称不匹配固定维度");
+      need(Object.hasOwn(STATUS, c.status) && !(data.kind === "fast" && c.status === "基本明确"), "检查项 " + (i + 1) + " 状态非法");
+      need(text(c.evidence), "检查项 " + (i + 1) + " 缺少依据/不适用原因");
+      need(!("value" in c), "维度分数由状态计算，不填写 value");
+    });
+    need(Array.isArray(data.findings), "findings 必须为完整事项数组（无事项用 []）");
+    const findings = [];
+    const ids = new Set();
+    (Array.isArray(data.findings) ? data.findings : []).forEach((f, i) => {
+      const where = "事项 " + (i + 1);
+      need(object(f), where + " 必须为对象");
+      if (!object(f)) return;
+      need(text(f.id) && (data.kind === "fast" ? /^Q[1-9]\d*$/.test(f.id) : /^建议\s?\d{3,}$/.test(f.id)), where + " 编号格式错误");
+      need(!ids.has(f.id), where + " 编号重复"); ids.add(f.id);
+      need(PRIORITY.includes(f.priority) && !(data.kind === "fast" && f.priority === "P3"), where + " 优先级非法");
+      ["title", "owner", "location", "evidence", "fact", "advice", "testImpact", "type"].forEach(k => need(text(f[k]), where + " 缺少 " + k));
+      need(!("closed" in f) && !("confirmed" in f), where + " 不允许手填关闭或确认标志");
+      need(Array.isArray(f.affected) && f.affected.length > 0 && f.affected.every(n => Number.isInteger(n) && n >= 1 && n <= names.length) && new Set(f.affected).size === f.affected.length, where + " affected 必须为不重复的维度编号");
+      let required = 0, answered = 0;
+      for (const key of ["business", "technical"]) {
+        const b = f[key];
+        need(object(b) && typeof b.required === "boolean", where + " 缺少 " + key + ".required");
+        if (!object(b)) continue;
+        if (b.required) {
+          required++;
+          need(text(b.question), where + " " + key + " 缺少能直接回答的问题");
+          need(text(b.answer) === text(b.source), where + " " + key + " 答案与确认来源必须同时提供");
+          if (text(b.answer) && text(b.source)) answered++;
+        } else {
+          need(!text(b.answer) && !text(b.source), where + " 非必需确认项不得夹带答案");
+        }
+      }
+      need(required > 0, where + " 至少需要一个确认对象");
+      const open = required === 0 || answered < required;
+      if (data.kind === "fast" && data.lane === "product" && f.priority === "P0" && open) need(["fill_rule", "rework", "cannot_close"].includes(f.impact), where + " 产品 P0 必须填写 impact");
+      const doc = f.document === undefined ? { status:"未写入", evidence:"" } : f.document;
+      const verification = f.verification === undefined ? { status:"未验证", evidence:"" } : f.verification;
+      need(object(doc) && ["未写入", "正文已生成", "已写入"].includes(doc.status), where + " 文档状态非法");
+      need(object(verification) && ["未验证", "已验证"].includes(verification.status), where + " 验证状态非法");
+      if (object(doc) && doc.status !== "未写入") {
+        need(text(doc.evidence), where + " 生成/写入必须有对应依据");
+        need(answered > 0, where + " 生成/写入至少需要一个已确认分支，只补该分支内容");
+      }
+      if (object(verification) && verification.status === "已验证") need(text(verification.evidence), where + " 已验证必须有执行证据");
+      findings.push({ ...f, open, confirmation:open ? (answered ? "部分确认" : "待确认") : "已确认", document:doc, verification });
+    });
+    if (errors.length) return { ok:false, errors };
+    const open = findings.filter(f => f.open);
+    const count = Object.fromEntries(PRIORITY.map(p => [p, open.filter(f => f.priority === p).length]));
+    for (const c of checks) {
+      const linked = open.filter(f => f.affected.includes(c.id));
+      if (c.status === "不适用") need(linked.length === 0, "不适用维度 " + c.id + " 不应关联待确认事项");
+      else if (c.status === "已明确") need(linked.length === 0, "维度 " + c.id + " 仍有关联待确认事项，不能标已明确");
+      else need(linked.length > 0, "维度 " + c.id + " 非已明确但没有待确认依据；请复筛或补事项");
+      if (data.kind === "deep" && linked.length) {
+        const priority = PRIORITY.find(p => linked.some(f => f.priority === p));
+        if (priority === "P0") need(c.status === "未明确", "P0 关联维度 " + c.id + " 必须为未明确");
+        if (priority === "P1") need(["部分明确", "未明确"].includes(c.status), "P1 关联维度 " + c.id + " 不得标基本明确/已明确");
+        if (["P2", "P3"].includes(priority)) need(["基本明确", "未明确"].includes(c.status), "仅P2/P3的维度 " + c.id + " 应为基本明确；完全未描述可为未明确");
+      }
+    }
+    if (errors.length) return { ok:false, errors };
+    const applicable = checks.filter(c => c.status !== "不适用");
+    const average = applicable.length ? applicable.reduce((s, c) => s + STATUS[c.status], 0) / applicable.length : null;
+    const readable = data.materials.some(m => m.state === "已读全文" || m.state === "部分读取");
+    const result = readable ? classify(data.kind, data.lane, count, average, applicable.length, open.filter(f => f.priority === "P0").map(f => f.impact)) : { level:"unknown", verdict:"材料未能读取，暂不判断" };
+    const sorted = [...open].sort((a,b) => PRIORITY.indexOf(a.priority) - PRIORITY.indexOf(b.priority));
+    const clear = checks.filter(c => c.status === "已明确").length;
+    const shown = [...sorted.filter(f => f.priority === "P0").slice(0,5), ...sorted.filter(f => f.priority !== "P0")].slice(0,top);
+    const remaining = sorted.filter(f => !shown.includes(f));
+    let nextStep = !readable ? "请提供可读取的需求材料，再进行审查。" : !applicable.length ? "请先确认本次需求范围；所有维度均不适用时不计算分数、不作准入判断。" : open.length ? "先回复 " + shown.map(f => f.id).join("、") + "；业务与研发分别确认，随后只复筛受影响项。" : "当前材料未发现关键缺口；可按本轮目标进入下一阶段，功能仍需实际验证。";
+    if (readable && applicable.length && !open.length && findings.some(f => f.document.status !== "已写入")) nextStep += " 已确认事项若需补入需求，可先生成补充正文；编辑文件另行授权。";
+    if (data.kind === "fast" && data.lane === "product" && count.P0 > 0 && result.level === "warn") nextStep += " 若 P0 在评审前无法关闭，应改判暂不建议提交。";
+    if (readable && data.kind === "fast" && count.P0) nextStep += " 当前存在影响业务结果或实施条件的 P0，可按需做二级深审核对关联影响；也可先确认这些事项，不自动展开深审。";
+    return { ok:true, ...result, readable, count, average:readable ? average : null, score:!readable || average === null ? null : Math.round(average), applicable:applicable.length, clear, rate:readable && applicable.length ? clear + "/" + applicable.length : "—", findings, open:sorted, closed:findings.filter(f => !f.open), shown, remaining, checks:checks.map(c => ({ ...c, value:readable ? STATUS[c.status] : null })), nextStep, top };
+  }
+  function safeJSON(data) {
+    return JSON.stringify(data, null, 2).replace(/[<>&\u2028\u2029]/g, c => "\\u" + c.charCodeAt(0).toString(16).padStart(4,"0"));
+  }
+  const api = { compute, classify, safeJSON, STATUS, PRIORITY, FAST, DEEP };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.ReviewCore = api;
+})(typeof globalThis === "object" ? globalThis : this);
 
-const COLORS = { pass:["#1D9E75","#0F6E56"], warn:["#BA7517","#854F0B"], fail:["#E24B4A","#A32D2D"] }[DATA.level] || ["#378ADD","#185FA5"];
-const STAG = { "已明确":"t-ok", "基本明确":"t-mid", "部分明确":"t-part", "未明确":"t-no", "不适用":"t-na" };
-const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({
-  "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
-})[ch]);
-const N = DATA.dims.length, CX = 320, CY = 268, R = 168;
-const ang = i => (Math.PI * 2 * i / N) - Math.PI / 2;
-const pt = (i, r) => [CX + Math.cos(ang(i)) * r, CY + Math.sin(ang(i)) * r];
-
-const used = DATA.dims.filter(d => d.value !== null);
-const avg = used.length ? Math.round(used.reduce((s, d) => s + d.value, 0) / used.length) : 0;
-
-document.getElementById("t").textContent = DATA.title;
-document.getElementById("m").innerHTML =
-  "审查日期：" + esc(DATA.date) + " ｜ 门禁级别：二级深审<br>材料来源：" + esc(DATA.source) +
-  " ｜ 计入维度：" + used.length + "/" + N + "（不适用 " + (N - used.length) + " 项不计入）";
-document.getElementById("sn").textContent = DATA.score;
-document.getElementById("sc").className = "score v-" + DATA.level;
-document.getElementById("v").className = "verdict v-" + DATA.level;
-document.getElementById("v").textContent = DATA.verdict +
-  " ｜ P0 " + DATA.priorities.p0 + " 项 ｜ P1 " + DATA.priorities.p1 + " 项 ｜ P2 " + DATA.priorities.p2 + " 项 ｜ P3 " + DATA.priorities.p3 + " 项";
-document.getElementById("hint").textContent =
-  "外圈 100 分，内圈 0 分；灰色轴为不适用维度，不参与综合指数计算。当前计入均值 " + avg + " 分。";
-
-let svg = '<svg viewBox="0 0 640 540" width="100%" role="img" aria-label="12 维需求可测性雷达图，综合指数 ' + DATA.score + '">';
-[20,40,60,80,100].forEach(lv => {
-  const p = DATA.dims.map((d,i) => pt(i, R * lv / 100).join(",")).join(" ");
-  svg += '<polygon points="' + p + '" fill="' + (lv === 100 ? "#FFFFFF" : "none") + '" stroke="#E3E2DC" stroke-width="0.5"/>';
-});
-DATA.dims.forEach((d,i) => {
-  const [x,y] = pt(i, R);
-  svg += '<line x1="' + CX + '" y1="' + CY + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) +
-         '" stroke="' + (d.value === null ? "#DDDBD3" : "#E3E2DC") + '" stroke-width="0.5"/>';
-});
-const poly = used.map(d => pt(DATA.dims.indexOf(d), R * d.value / 100).join(",")).join(" ");
-svg += '<polygon points="' + poly + '" fill="' + COLORS[0] + '" fill-opacity="0.18" stroke="' + COLORS[1] + '" stroke-width="1.5"/>';
-used.forEach(d => {
-  const [x,y] = pt(DATA.dims.indexOf(d), R * d.value / 100);
-  svg += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3.2" fill="' + COLORS[1] + '"/>';
-});
-DATA.dims.forEach((d,i) => {
-  const [x,y] = pt(i, R + 30);
-  const c = Math.cos(ang(i));
-  const anchor = c > 0.25 ? "start" : (c < -0.25 ? "end" : "middle");
-  svg += '<text x="' + x.toFixed(1) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="' + anchor +
-         '" font-size="12" fill="' + (d.value === null ? "#A8A69E" : "#444441") + '">' +
-         esc(d.short) + (d.value === null ? "（不适用）" : "") + '</text>';
-});
-svg += '<text x="' + CX + '" y="' + (CY + 5) + '" text-anchor="middle" font-size="11" fill="#A8A69E">' + DATA.score + '</text>';
-svg += "</svg>";
-document.getElementById("chart").innerHTML = svg;
-
-document.getElementById("tb").innerHTML = DATA.dims.map((d,i) =>
-  '<tr><td>' + (i+1) + '</td><td>' + esc(d.name) + '</td><td class="c"><span class="tag ' + (STAG[d.status]||"t-na") + '">' +
-  esc(d.status) + '</span></td><td class="c">' + (d.value === null ? "—" : d.value) + '</td><td>' + esc(d.note || "—") + '</td></tr>'
-).join("");
-
-document.getElementById("cp").innerHTML =
-  '<span class="chip">建议总数 ' + (DATA.priorities.p0 + DATA.priorities.p1 + DATA.priorities.p2 + DATA.priorities.p3) + ' 项</span>' +
-  '<span class="chip">P0 ' + DATA.priorities.p0 + '</span><span class="chip">P1 ' + DATA.priorities.p1 +
-  '</span><span class="chip">P2 ' + DATA.priorities.p2 + '</span><span class="chip">P3 ' + DATA.priorities.p3 + '</span>';
-document.getElementById("td").innerHTML = DATA.todos.length
-  ? DATA.todos.map(t => '<div class="todo"><span class="lv lv-' + esc(t.level.toLowerCase()) + '">' + esc(t.level) + '</span><span>' + esc(t.text) + '</span></div>').join("")
-  : '<div class="todo"><span>当前材料未发现需要补充之处</span></div>';
-document.getElementById("f").textContent = DATA.note;
-</script>
-</body>
-</html>
+(function browserRender() {
+  "use strict";
+  const host = document.getElementById("review");
+  const el = (tag, text, cls, parent = host) => {
+    const node = document.createElement(tag);
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    if (cls) node.className = cls;
+    if (parent) parent.appendChild(node);
+    return node;
+  };
+  let data;
+  try { data = JSON.parse(document.getElementById("review-data").textContent); }
+  catch (e) { el("h1", "[ERR-OUT-03] 审查数据无法解析 / Invalid review data"); el("p", "未展示分数或准入结论。请检查 JSON 数据格式。", "error"); return; }
+  const r = ReviewCore.compute(data);
+  const en = data && data.lang === "en";
+  const t = (zh, eng) => en ? eng : zh;
+  const status = s => en ? ({ "已明确":"Clear", "基本明确":"Mostly clear", "部分明确":"Partly clear", "未明确":"Unclear", "不适用":"Not applicable", "待确认":"Pending", "部分确认":"Partly confirmed", "已确认":"Confirmed", "未写入":"Not written", "正文已生成":"Draft generated", "已写入":"Written", "未验证":"Not tested", "已验证":"Tested" }[s] || s) : s;
+  const verdict = v => en ? ({ "可提交评审":"Ready to submit for review", "建议补充后提交":"Supplement before submitting", "暂不建议提交":"Not ready to submit", "可以进入开发":"Ready for development", "补充确认后可以开发":"Confirm details before development", "暂不建议直接开发":"Not ready for development", "具备初步可测条件":"Ready for initial test planning", "补充确认后可测":"Confirm details before test planning", "暂不具备初步可测条件":"Not ready for initial test planning", "当前材料可支持用例设计":"Materials support test design", "补充确认后可支持":"Confirm details to support test design", "需要先完成关键口径对齐":"Align key rules first", "材料适用范围待确认，暂不判断":"Confirm scope before judging readiness", "材料未能读取，暂不判断":"Unreadable materials: no readiness decision" }[v] || v) : v;
+  if (!r.ok) {
+    el("h1", t("[ERR-OUT-03] 请先补齐审查数据", "[ERR-OUT-03] Correct the review data first"));
+    el("p", t("已停止评分和准入判断，未显示正常报告。请修正以下字段后重新生成。", "No score or readiness verdict is shown. Correct these fields and regenerate."), "error");
+    const list = el("ul"); r.errors.forEach(x => el("li", x, "", list)); return;
+  }
+  const header = el("header", null, "panel");
+  el("p", data.kind === "fast" ? t("一级快筛 · 8 项标准", "Level 1 · 8 checks") : t("二级深审 · 12 个维度", "Level 2 · 12 dimensions"), "eyebrow", header);
+  el("h1", data.title, "", header);
+  el("p", data.reportId + " · r" + data.revision + " · " + data.date + " · " + data.materialVersion, "muted", header);
+  el("h2", verdict(r.verdict), "verdict " + r.level, header);
+  el("p", t("下一步：", "Next: ") + (en ? (r.level === "unknown" ? "Provide readable materials and confirm the applicable scope." : r.open.length ? "Reply by item ID; business confirms outcomes and engineering confirms implementation. Recheck only affected dimensions." : "Proceed according to the stated review goal. Functional testing is still required.") : r.nextStep), "next", header);
+  if (en && data.kind === "fast" && data.lane === "product" && r.count.P0 && r.level === "warn") el("p", "If P0 items cannot close before review, change the verdict to not ready to submit.", "", header);
+  if (!r.readable) {
+    el("p", t("[ERR-MAT-01] 材料均未能读取。已停止评分、图表和事项结论展示。请提供可读取材料后重新审查。", "[ERR-MAT-01] No materials could be read. Scoring, charts and findings are withheld. Provide readable materials and review again."), "error", header);
+    data.materials.forEach(m => el("p", m.name + " ｜ " + m.source + " ｜ " + m.state, "", header));
+    host.dataset.valid="true"; host.dataset.level="unknown"; return;
+  }
+  if (en && data.kind === "fast" && r.count.P0) el("p", "P0 items affect outcomes or readiness. A deeper review may help check related impacts; it is optional and never started automatically.", "", header);
+  if (data.kind === "deep" && data.summary) el("p", t("整体判断：", "Overall assessment: ") + data.summary, "", header);
+  const chips = el("div", null, "chips", header);
+  ReviewCore.PRIORITY.filter(p => data.kind === "deep" || p !== "P3").forEach(p => el("span", p + " " + r.count[p], "chip", chips));
+  el("span", t("待确认 ", "Pending ") + r.open.length + t(" 项", ""), "chip", chips);
+  el("span", t("已确认 ", "Confirmed ") + r.closed.length + t(" 项", ""), "chip", chips);
+  el("p", t("本页反映当前材料的明确程度，不是产品质量分，也不是功能测试通过率。业务确认、文件写入与功能验证分别记录。", "This reflects material clarity, not product quality or a test pass rate. Confirmation, document writing and testing are tracked separately."), "muted", header);
+  const action = el("section", null, "panel");
+  el("h2", t("先处理这些待确认事项", "Resolve these items first"), "", action);
+  el("p", t("优先级与结论按全部待确认事项计算，首屏显示上限不影响判断。", "Counts and verdicts use all open items, not just the items visible first."), "muted", action);
+  function finding(f, parent) {
+    const card = el("article", null, "finding", parent);
+    el("h3", f.id + " · " + f.priority + " · " + f.title, "", card);
+    el("p", t("谁来确认：", "Owner: ") + f.owner + " ｜ " + status(f.confirmation), "", card);
+    for (const key of ["business", "technical"]) {
+      const b = f[key]; if (!b.required) continue;
+      el("p", (key === "business" ? t("产品确认业务结果：", "Business outcome: ") : t("研发确认实现方案：", "Engineering implementation: ")) + b.question, "", card);
+      if (b.answer) el("p", t("已收到：", "Confirmed answer: ") + b.answer + t("；依据：", "; source: ") + b.source, "answer", card);
+    }
+    el("p", t("补到哪里：", "Document location: ") + f.location, "", card);
+    el("p", t("关联检查项：", "Affected checks: ") + f.affected.join("、"), "muted", card);
+    el("p", t("建议补充：", "Suggested change: ") + f.advice, "", card);
+    el("p", t("文档：", "Document: ") + status(f.document.status) + " ｜ " + t("功能：", "Function: ") + status(f.verification.status), "muted", card);
+    const details = el("details", null, "", card);
+    el("summary", t("查看依据与给研发的备注", "Evidence and technical notes"), "", details);
+    [[t("原文依据", "Evidence"),f.evidence],[t("材料现状", "Material facts"),f.fact],[t("影响", "Impact"),f.testImpact],[t("类型", "Type"),f.type],[t("文档操作依据", "Document evidence"),f.document.evidence],[t("验证依据", "Test evidence"),f.verification.evidence],[t("给研发的备注", "Technical notes"),f.technicalNotes]].forEach(([k,v]) => { if(v) el("p", k + "：" + v, "", details); });
+  }
+  r.shown.forEach(f => finding(f,action));
+  if (!r.open.length) el("p", r.level === "unknown" ? t("材料范围未确认，不能据此认定没有缺口。", "Scope is unconfirmed; this does not mean no gaps exist.") : t("当前材料未发现待确认缺口。", "No open gaps found in current materials."), "", action);
+  if (r.remaining.length) {
+    const more = el("details", null, "", action);
+    el("summary", t("展开其余 ", "Show remaining ") + r.remaining.length + t(" 项（仍计入判断）", " items (included in verdict)"), "", more);
+    r.remaining.forEach(f => finding(f,more));
+  }
+  if (r.closed.length) {
+    const closed = el("details", null, "panel");
+    el("summary", t("已确认事项与依据 ", "Confirmed items and evidence ") + r.closed.length, "", closed);
+    r.closed.forEach(f => finding(f,closed));
+  }
+  const overview = el("section", null, "panel");
+  el("h2", data.kind === "fast" ? t("8 项标准明细", "8-check detail") : t("12 维材料明确程度", "Clarity across 12 dimensions"), "", overview);
+  el("p", data.kind === "fast" ? t("已明确 / 适用项：", "Clear / applicable: ") + r.rate : t("综合可测性指数：", "Clarity index: ") + (r.score === null ? "—" : r.score) + t("；不适用项不计入，结论按未取整均值及待确认优先级判断。", "; N/A excluded; verdict uses the unrounded mean and open priorities."), "metric", overview);
+  if (data.kind === "deep" && r.applicable) {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS,"svg");
+    svg.setAttribute("viewBox","0 0 760 550"); svg.setAttribute("role","img"); svg.setAttribute("aria-label",t("12维材料明确程度雷达图", "12-dimension material clarity radar"));
+    overview.appendChild(svg);
+    const add = (tag,attrs,txt) => { const n = document.createElementNS(NS,tag); Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,String(v))); if(txt!==undefined)n.textContent=txt; svg.appendChild(n); return n; };
+    const pt = (i,radius) => { const a=i*2*Math.PI/12-Math.PI/2; return [380+Math.cos(a)*radius,265+Math.sin(a)*radius]; };
+    [100,80,60,40,20].forEach(v => add("polygon",{points:r.checks.map((_,i)=>pt(i,165*v/100).join(",")).join(" "),fill:"none",stroke:"#ddd","stroke-width":1}));
+    r.checks.forEach((c,i)=> { const [x,y]=pt(i,165); add("line",{x1:380,y1:265,x2:x,y2:y,stroke:c.value===null?"#aaa":"#ddd"}); });
+    const used = r.checks.map((c,i)=>({c,i})).filter(x=>x.c.value!==null);
+    const color = {pass:"#0F6E56",warn:"#854F0B",fail:"#A32D2D",unknown:"#5F5E5A"}[r.level];
+    if (used.length===12) add("polygon",{points:used.map(x=>pt(x.i,165*x.c.value/100).join(",")).join(" "),fill:color,"fill-opacity":0.09,stroke:color,"stroke-width":2});
+    used.forEach(x=> {
+      const [cx,cy]=pt(x.i,165*x.c.value/100); add("circle",{cx,cy,r:4,fill:color});
+      const next=r.checks[(x.i+1)%12];
+      if(used.length<12&&next.value!==null){const [nx,ny]=pt((x.i+1)%12,165*next.value/100);add("line",{x1:cx,y1:cy,x2:nx,y2:ny,stroke:color,"stroke-width":2});}
+    });
+    el("p",t("不适用轴不补零，不跨缺口填面积；这里只连接相邻的适用点。", "N/A axes are not zero; no area bridges missing dimensions. Only adjacent applicable points are connected."),"muted",overview);
+    r.checks.forEach((c,i)=> { const [x,y]=pt(i,202); const cos=Math.cos(i*2*Math.PI/12-Math.PI/2); add("text",{x,y:y+4,"text-anchor":cos>0.25?"start":cos< -0.25?"end":"middle","font-size":12,fill:c.value===null?"#777":"#333"},(c.short||c.label||c.name)+(c.value===null?t("（不适用）"," (N/A)"):"")); });
+  }
+  const grid=el("div",null,"grid",overview);
+  r.checks.forEach(c=> {
+    const box=el("article",null,"check",grid);
+    el("h3",c.id+" · "+(c.label||c.name),"",box);
+    const cls={"已明确":"pass","基本明确":"warn","部分明确":"warn","未明确":"fail","不适用":"unknown"}[c.status];
+    el("span",status(c.status)+(data.kind==="deep"?" · "+(c.value===null?"—":c.value):""),"badge "+cls,box);
+    el("p",t("依据：","Evidence: ")+c.evidence,"muted",box);
+    if(c.advice)el("p",c.advice,"",box);
+  });
+  if (data.kind === "deep") {
+    const evidence=el("section",null,"panel");
+    el("h2",t("建议补充的验收证据", "Acceptance evidence to add"),"",evidence);
+    (data.acceptanceEvidence || []).forEach(x=>el("p",x,"",evidence));
+    if (!data.acceptanceEvidence?.length) el("p",t("按各建议条目的影响补充证据；未提供证据不等于已验证。", "Add evidence according to item impacts; absent evidence is not a test result."),"",evidence);
+  }
+  const materials=el("details",null,"panel"); el("summary",t("材料来源、读取状态与本轮变更","Materials, read status and changes"),"",materials);
+  data.materials.forEach(m=>el("p",m.name+" ｜ "+m.source+" ｜ "+m.version+" ｜ "+m.state+" ｜ "+m.role,"",materials));
+  (data.changes||[]).forEach(c=>el("p",c,"",materials));
+  el("footer",t("确认答案不会自动改文件。需要补文档时可先生成可粘贴正文；明确授权编辑后优先保存修订副本。", "Answers do not automatically edit files. Request suggested text first, or explicitly authorize a revised copy."),"muted");
+  host.dataset.valid="true"; host.dataset.level=r.level;
+})();
+</script></body></html>
