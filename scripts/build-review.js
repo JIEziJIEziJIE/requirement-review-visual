@@ -1,6 +1,7 @@
 "use strict";
 const fs = require("node:fs");
 const path = require("node:path");
+const { TextDecoder } = require("node:util");
 const core = require("./review-core.js");
 const root = path.resolve(__dirname, "..");
 
@@ -14,29 +15,43 @@ function browserRender() {
     if (parent) parent.appendChild(node);
     return node;
   };
-  let data;
+  const reportError = (code, message, next, issues = [], en = false) => {
+    host.dataset.valid = "false";
+    el("h1", "[" + code + "] " + (en ? "What happened: " : "发生什么：") + message);
+    el("p", en ? "Handled: Scoring and readiness decisions stopped. No automatic repair or retry; the browser has not written any files or partial files." : "已做处理：停止评分和准入判断；未自动修复、未重试；浏览器未写入文件，无部分文件。", "error");
+    el("p", (en ? "Next: " : "建议下一步：") + next);
+    const list = el("ul");
+    issues.forEach(x => el("li", typeof x === "string" ? x : (x.path || "DATA") + "：" + (x.message || "字段不符合契约"), "", list));
+  };
+  let data, r;
   try { data = JSON.parse(document.getElementById("review-data").textContent); }
-  catch (e) { el("h1", "[ERR-OUT-03] 审查数据无法解析 / Invalid review data"); el("p", "未展示分数或准入结论。请检查 JSON 数据格式。", "error"); return; }
-  const r = ReviewCore.compute(data);
+  catch (_) { reportError("ERR-OUT-03", "审查数据无法解析 / Invalid review data", "由执行者核对嵌入数据与生成步骤；用户仅补充业务事实，无需手写 JSON。"); return; }
+  try { r = ReviewCore.compute(data); }
+  catch (_) { reportError("ERR-INT-01", "审查引擎未能完成计算", "由执行者核对引擎与模板版本；用户仅补充业务事实，无需手写 JSON。"); return; }
   const en = data && data.lang === "en";
   const t = (zh, eng) => en ? eng : zh;
   const status = s => en ? ({ "已明确":"Clear", "基本明确":"Mostly clear", "部分明确":"Partly clear", "未明确":"Unclear", "不适用":"Not applicable", "待确认":"Pending", "部分确认":"Partly confirmed", "已确认":"Confirmed", "未写入":"Not written", "正文已生成":"Draft generated", "已写入":"Written", "未验证":"Not tested", "已验证":"Tested" }[s] || s) : s;
   const verdict = v => en ? ({ "可提交评审":"Ready to submit for review", "建议补充后提交":"Supplement before submitting", "暂不建议提交":"Not ready to submit", "可以进入开发":"Ready for development", "补充确认后可以开发":"Confirm details before development", "暂不建议直接开发":"Not ready for development", "具备初步可测条件":"Ready for initial test planning", "补充确认后可测":"Confirm details before test planning", "暂不具备初步可测条件":"Not ready for initial test planning", "当前材料可支持用例设计":"Materials support test design", "补充确认后可支持":"Confirm details to support test design", "需要先完成关键口径对齐":"Align key rules first", "材料适用范围待确认，暂不判断":"Confirm scope before judging readiness", "材料未能读取，暂不判断":"Unreadable materials: no readiness decision" }[v] || v) : v;
   if (!r.ok) {
-    el("h1", t("[ERR-OUT-03] 请先补齐审查数据", "[ERR-OUT-03] Correct the review data first"));
-    el("p", t("已停止评分和准入判断，未显示正常报告。请修正以下字段后重新生成。", "No score or readiness verdict is shown. Correct these fields and regenerate."), "error");
-    const list = el("ul"); r.errors.forEach(x => el("li", x, "", list)); return;
+    reportError("ERR-OUT-03", t("审查数据不符合契约", "Review data does not meet the contract"), t("由执行者核对以下字段；用户仅补充业务事实，无需手写 JSON。", "The operator must check the fields below; users only supply business facts, not handwritten JSON."), r.issues || r.errors || [], en);
+    return;
   }
   const header = el("header", null, "panel");
   el("p", data.kind === "fast" ? t("一级快筛 · 8 项标准", "Level 1 · 8 checks") : t("二级深审 · 12 个维度", "Level 2 · 12 dimensions"), "eyebrow", header);
   el("h1", data.title, "", header);
   el("p", data.reportId + " · r" + data.revision + " · " + data.date + " · " + data.materialVersion, "muted", header);
-  el("h2", verdict(r.verdict), "verdict " + r.level, header);
+  if (r.limited) {
+    el("p", t("[WARN-MAT-01] 仅基于已读范围的局部审查，不代表整份需求已通过。", "[WARN-MAT-01] Partial review of readable scope only; this is not approval of the complete requirement."), "error", header);
+    data.materials.filter(m => m.state !== "已读全文").forEach(m => el("p", m.name + " ｜ " + m.state + " ｜ " + m.coverage, "", header));
+  }
+  el("h2", (r.limited ? t("已读范围结论：", "Read-scope verdict: ") : "") + verdict(r.verdict), "verdict " + r.level, header);
   el("p", t("下一步：", "Next: ") + (en ? (r.level === "unknown" ? "Provide readable materials and confirm the applicable scope." : r.open.length ? "Reply by item ID; business confirms outcomes and engineering confirms implementation. Recheck only affected dimensions." : "Proceed according to the stated review goal. Functional testing is still required.") : r.nextStep), "next", header);
   if (en && data.kind === "fast" && data.lane === "product" && r.count.P0 && r.level === "warn") el("p", "If P0 items cannot close before review, change the verdict to not ready to submit.", "", header);
   if (!r.readable) {
-    el("p", t("[ERR-MAT-01] 材料均未能读取。已停止评分、图表和事项结论展示。请提供可读取材料后重新审查。", "[ERR-MAT-01] No materials could be read. Scoring, charts and findings are withheld. Provide readable materials and review again."), "error", header);
-    data.materials.forEach(m => el("p", m.name + " ｜ " + m.source + " ｜ " + m.state, "", header));
+    el("p", t("[ERR-MAT-01] 发生什么：材料均未能读取。", "[ERR-MAT-01] What happened: No materials could be read."), "error", header);
+    el("p", t("已做处理：停止评分、图表和事项结论展示；未自动修复、未重试；浏览器未写入文件，无部分文件。", "Handled: Scores, charts and findings are withheld. No automatic repair or retry; the browser has written no files or partial files."), "", header);
+    el("p", t("建议下一步：请提供可读取材料及业务事实，由执行者核对读取状态；用户无需手写 JSON。", "Next: Provide readable materials and business facts; the operator checks read status. Users need not write JSON."), "", header);
+    data.materials.forEach(m => el("p", m.name + " ｜ " + m.source + " ｜ " + m.state + " ｜ " + (m.coverage || ""), "", header));
     host.dataset.valid="true"; host.dataset.level="unknown"; return;
   }
   if (en && data.kind === "fast" && r.count.P0) el("p", "P0 items affect outcomes or readiness. A deeper review may help check related impacts; it is optional and never started automatically.", "", header);
@@ -56,7 +71,7 @@ function browserRender() {
     for (const key of ["business", "technical"]) {
       const b = f[key]; if (!b.required) continue;
       el("p", (key === "business" ? t("产品确认业务结果：", "Business outcome: ") : t("研发确认实现方案：", "Engineering implementation: ")) + b.question, "", card);
-      if (b.answer) el("p", t("已收到：", "Confirmed answer: ") + b.answer + t("；依据：", "; source: ") + b.source, "answer", card);
+      if (b.answer && b.answer.trim()) el("p", t("已收到：", "Confirmed answer: ") + b.answer + t("；依据：", "; source: ") + b.source, "answer", card);
     }
     el("p", t("补到哪里：", "Document location: ") + f.location, "", card);
     el("p", t("关联检查项：", "Affected checks: ") + f.affected.join("、"), "muted", card);
@@ -117,16 +132,15 @@ function browserRender() {
     if (!data.acceptanceEvidence?.length) el("p",t("按各建议条目的影响补充证据；未提供证据不等于已验证。", "Add evidence according to item impacts; absent evidence is not a test result."),"",evidence);
   }
   const materials=el("details",null,"panel"); el("summary",t("材料来源、读取状态与本轮变更","Materials, read status and changes"),"",materials);
-  data.materials.forEach(m=>el("p",m.name+" ｜ "+m.source+" ｜ "+m.version+" ｜ "+m.state+" ｜ "+m.role,"",materials));
+  data.materials.forEach(m=>el("p",m.name+" ｜ "+m.source+" ｜ "+m.version+" ｜ "+m.state+" ｜ "+m.role+(m.coverage?" ｜ "+m.coverage:""),"",materials));
   (data.changes||[]).forEach(c=>el("p",c,"",materials));
   el("footer",t("确认答案不会自动改文件。需要补文档时可先生成可粘贴正文；明确授权编辑后优先保存修订副本。", "Answers do not automatically edit files. Request suggested text first, or explicitly authorize a revised copy."),"muted");
   host.dataset.valid="true"; host.dataset.level=r.level;
 }
 function renderHTML(data) {
-  const result=core.compute(data);
-  if(!result.ok)throw new Error(result.errors.join("\n"));
+  validateData(data);
   const engine=fs.readFileSync(path.join(__dirname,"review-core.js"),"utf8");
-  return `<!DOCTYPE html>\n<html lang="${data.lang==="en"?"en":"zh-CN"}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"><link rel="icon" href="data:,"><title>Requirement review · v2.4.0</title><style>
+  return `<!DOCTYPE html>\n<html lang="${data.lang==="en"?"en":"zh-CN"}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"><link rel="icon" href="data:,"><title>Requirement review · v2.4.1</title><style>
 *{box-sizing:border-box}body{margin:0;padding:28px 20px;background:#fafaf8;color:#2c2c2a;font-family:system-ui,"Microsoft YaHei",sans-serif;font-size:14px;line-height:1.65}main{max-width:1000px;margin:auto}.panel{background:white;border:1px solid #e3e2dc;border-radius:12px;padding:22px;margin-bottom:16px}h1{font-size:25px;line-height:1.4;margin:8px 0}h2{font-size:18px;margin:10px 0}h3{font-size:15px;margin:6px 0}p{margin:8px 0;overflow-wrap:anywhere}.eyebrow,.muted{font-size:12px;color:#60605b}.verdict{padding:12px 16px;border-radius:8px}.pass{background:#e1f5ee;color:#0f6e56}.warn{background:#faeeda;color:#854f0b}.fail,.error{background:#fcebee;color:#a32d2d}.unknown{background:#f1efe8;color:#5f5e5a}.chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.chip{border:1px solid #ddd;border-radius:18px;padding:2px 10px;font-size:12px}.finding{border-top:1px solid #eee;padding:16px 0}.answer{color:#0f6e56}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}.check{border:1px solid #e3e2dc;border-radius:8px;padding:14px}.badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:12px}summary{cursor:pointer;font-weight:500}details p{font-size:13px}svg{display:block;width:100%;max-width:760px;margin:0 auto}.metric{font-size:14px}footer{padding:0 8px}@media print{body{background:white;padding:0}.panel{break-inside:auto}.finding,.check{break-inside:avoid}details>*{display:block!important}summary{display:block}.grid{grid-template-columns:1fr 1fr}}@media(max-width:500px){body{padding:12px}.panel{padding:16px}h1{font-size:22px}}
 </style></head><body><main id="review"></main><noscript>需要启用 JavaScript 查看本地报告 / Enable JavaScript to view this offline report.</noscript>
 <script type="application/json" id="review-data">${core.safeJSON(data)}</script>
@@ -134,19 +148,21 @@ function renderHTML(data) {
 }
 const escapeMD=v=>String(v??"—").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\|/g,"&#124;").replace(/\r?\n/g," ");
 function renderMarkdown(data) {
-  const r=core.compute(data); if(!r.ok)throw new Error(r.errors.join("\n"));
+  const r=validateData(data);
   const en=data.lang==="en", t=(zh,eng)=>en?eng:zh, e=escapeMD;
   const lines=["# "+e(data.title),"","> "+e(data.reportId)+" | r"+data.revision+" | "+e(data.date)+" | "+e(data.materialVersion),"> "+t("结论：","Verdict (canonical): ")+r.verdict,"> "+t("指标只反映材料明确程度，不代表产品质量或功能通过率。","Metrics describe material clarity, not product quality or a functional pass rate."),""];
+  if (r.limited) lines.splice(4, 0, "> [WARN-MAT-01] " + t("仅基于已读范围的局部审查，不代表整份需求已通过；未读范围须补齐后另行审查。", "Partial review of readable scope only; not approval of the complete requirement. Unread scope needs a separate review."));
   if (!r.readable) {
-    lines.push(t("[ERR-MAT-01] 所有材料均未能读取。已停止评分、维度与事项结论展示。请提供可读取材料后重新审查。", "[ERR-MAT-01] No readable materials. Scores and findings are withheld. Provide readable materials and review again."), "", ...data.materials.map(m=>"- "+[m.name,m.source,m.state].map(e).join(" | ")));
+    lines.push(t("[ERR-MAT-01] 发生什么：所有材料均未能读取。", "[ERR-MAT-01] What happened: No materials could be read."), "", t("已做处理：停止评分、维度和事项结论展示；未自动修复、未重试。本文件只记录读取失败，不是正常审查结果；文件写入状态以生成命令的实际清单为准。", "Handled: Scores, dimensions and findings are withheld; no automatic repair or retry. This document records unreadable materials, not a normal review. Actual write status comes from the command result."), "", t("建议下一步：提供可读取材料及业务事实，确认后另行审查；无需用户手写 JSON。", "Next: Provide readable materials and business facts for a separately authorized review; users need not write JSON."), "", ...data.materials.map(m=>"- "+[m.name,m.source,m.state,m.coverage].map(e).join(" | ")));
+    lines.push("", "<!-- review-data-v2\n" + core.safeJSON(data).replace(/-/g,"\\u002d") + "\n-->", "");
     return lines.join("\n");
   }
   const priorities=core.PRIORITY.filter(p=>data.kind==="deep"||p!=="P3").map(p=>p+" "+r.count[p]).join(" / ");
-  const materialLines=()=> { lines.push("| "+t("材料 | 来源 | 版本 | 读取状态 | 作用","Material | Source | Version | Read status | Role")+" |","|---|---|---|---|---|");data.materials.forEach(m=>lines.push("| "+[m.name,m.source,m.version,m.state,m.role].map(e).join(" | ")+" |")); lines.push(""); };
+  const materialLines=()=> { lines.push("| "+t("材料 | 来源 | 版本 | 读取状态 | 作用 | 已读/未读范围","Material | Source | Version | Read status | Role | Coverage")+" |","|---|---|---|---|---|---|");data.materials.forEach(m=>lines.push("| "+[m.name,m.source,m.version,m.state,m.role,m.coverage||"—"].map(e).join(" | ")+" |")); lines.push(""); };
   const issue=(f)=> {
     lines.push("### "+e(f.id)+"｜"+e(f.title),"","- "+t("优先级：","Priority: ")+f.priority,"- "+t("建议类型：","Type: ")+e(f.type),"- "+t("依据位置：","Evidence: ")+e(f.evidence),"- "+t("当前材料表现：","Material facts: ")+e(f.fact),"- "+t("建议调整：","Suggested change: ")+e(f.advice),"- "+t("对测试工作的影响：","Test impact: ")+e(f.testImpact),"- "+t("待确认对象：","Owner: ")+e(f.owner),"- "+t("确认状态：","Confirmation (canonical): ")+f.confirmation,"- "+t("建议补充位置：","Document location: ")+e(f.location));
     lines.push("- "+t("关联检查项：", "Affected checks: ")+f.affected.join("、"));
-    for(const key of ["business","technical"]){const b=f[key];if(!b.required)continue;lines.push("- "+(key==="business"?t("产品确认业务结果：","Business outcome: "):t("研发确认实现方案：","Engineering implementation: "))+e(b.question));if(b.answer)lines.push("  - "+t("已确认答案：","Answer: ")+e(b.answer)+t("；来源：","; source: ")+e(b.source));}
+    for(const key of ["business","technical"]){const b=f[key];if(!b.required)continue;lines.push("- "+(key==="business"?t("产品确认业务结果：","Business outcome: "):t("研发确认实现方案：","Engineering implementation: "))+e(b.question));if(b.answer && b.answer.trim())lines.push("  - "+t("已确认答案：","Answer: ")+e(b.answer)+t("；来源：","; source: ")+e(b.source));}
     lines.push("- "+t("文档状态：","Document status (canonical): ")+f.document.status+(f.document.evidence?" — "+e(f.document.evidence):""),"- "+t("功能状态：","Test status (canonical): ")+f.verification.status+(f.verification.evidence?" — "+e(f.verification.evidence):""));
     if(f.technicalNotes)lines.push("- "+t("给研发的备注：","Technical notes: ")+e(f.technicalNotes));lines.push("");
   };
@@ -164,10 +180,10 @@ function renderMarkdown(data) {
   if(!r.findings.length)lines.push(r.level==="unknown"?t("材料适用范围或读取状态待确认，暂不作无缺口判断。","Scope or readability is unconfirmed; no gap-free claim is made."):t("当前材料未发现关键缺口。","No key gaps found in current materials."),"");
   [...r.open,...r.closed].forEach(issue);
   if(data.kind==="deep"){lines.push("## "+t("四、按审查维度汇总","4. Dimension summary"),"");checks();lines.push("## "+t("五、待确认事项","5. Pending confirmations"),"");r.open.forEach(f=>lines.push("- [ ] "+e(f.id)+" "+e(f.title)+" — "+e(f.owner)));lines.push("","## "+t("六、建议补充的验收证据","6. Acceptance evidence to add"),"");(data.acceptanceEvidence||[]).forEach(x=>lines.push("- "+e(x)));if(!data.acceptanceEvidence?.length)lines.push(t("按各建议条目的影响补充证据；未提供证据不等于已验证。","Add evidence according to item impacts; absent evidence is not a test result."));lines.push("","## "+t("七、测试准备提示","7. Test preparation"),"",e(r.nextStep),"",t("补文档不等于功能验证。未确认的规则不能当作最终测试预期。","Document updates are not functional tests. Unconfirmed rules cannot be final expected results."),"","## "+t("八、材料与证据索引","8. Materials and evidence"),"");materialLines();}
-  else{lines.push("## "+t("五、下一步与本轮变更","5. Next steps and changes"),"",e(r.nextStep),"",t("补文档按需触发；明确授权编辑后优先修订副本。","Document edits are optional and require explicit authorization; prefer a revised copy."),"",...((data.changes||[]).map(x=>"- "+e(x))),"","## "+t("六、待确认问题清单（可直接转发）","6. Questions to forward"),"");r.open.forEach(f=>{for(const key of ["business","technical"]){const b=f[key];if(b.required&&!b.answer)lines.push(e(f.id)+" "+(key==="business"?t("产品：","Business: "):t("研发：","Engineering: "))+e(b.question));}});}
+  else{lines.push("## "+t("五、下一步与本轮变更","5. Next steps and changes"),"",e(r.nextStep),"",t("补文档按需触发；明确授权编辑后优先修订副本。","Document edits are optional and require explicit authorization; prefer a revised copy."),"",...((data.changes||[]).map(x=>"- "+e(x))),"","## "+t("六、待确认问题清单（可直接转发）","6. Questions to forward"),"");r.open.forEach(f=>{for(const key of ["business","technical"]){const b=f[key];if(b.required&&!(b.answer && b.answer.trim()))lines.push(e(f.id)+" "+(key==="business"?t("产品：","Business: "):t("研发：","Engineering: "))+e(b.question));}});}
   lines.push("",t("说明：所有待确认事项均计入优先级和结论；HTML 首屏仅展示前 ","All open items count towards the verdict; HTML initially shows ")+r.top+t(" 项，其余可展开。"," items; the rest can be expanded."),"");
   if(data.kind==="deep" && data.changes?.length) lines.push(t("本轮变更：", "Changes in this revision:"),...data.changes.map(x=>"- "+e(x)),"");
-  // Safe, machine-readable continuation state without adding a visible report section.
+  // 安全嵌入机器可读续审状态，不增加可见报告章节。
   lines.push("<!-- review-data-v2\n"+core.safeJSON(data).replace(/-/g,"\\u002d")+"\n-->","");
   return lines.join("\n");
 }
@@ -186,33 +202,216 @@ function demo(kind) {
   }
   return data;
 }
-function writeNew(dest,content){fs.writeFileSync(dest,content,{encoding:"utf8",flag:"wx"});}
-function outputPlan(data,base,format=data.format||"md+html") {
-  if(!["md+html","md","html"].includes(format))throw new Error("format 必须为 md+html/md/html");
-  const entries=[];
-  if(format!=="md")entries.push({path:base+".html",content:renderHTML(data)});
-  if(format!=="html")entries.push({path:base+".md",content:renderMarkdown(data)});
+// 上限仅适用于统一审查 DATA JSON，不限制原始需求文档或其他原材料。
+const MAX_INPUT_BYTES = 8 * 1024 * 1024;
+const FORMATS = ["md+html", "md", "html"];
+const NO_WRITE = "未自动修复、未重试；未写入任何输出，无部分文件；未修改输入文件。";
+class ReviewError extends Error {
+  constructor(code, exitCode, message, next, details = {}, handled = NO_WRITE) {
+    super(message);
+    this.code = code;
+    this.exitCode = exitCode;
+    this.handled = handled;
+    this.next = next;
+    this.details = { completedFiles: [], incompleteFiles: [], unattemptedFiles: [], ...details };
+  }
+  toJSON() {
+    return { ok: false, code: this.code, message: this.message, handled: this.handled, next: this.next, details: this.details };
+  }
+}
+const systemCode = error => /^[A-Z][A-Z0-9_]{0,39}$/.test(error?.code || "") ? error.code : undefined;
+function argumentError() {
+  return new ReviewError("ERR-CLI-01", 2, "生成命令或参数不符合约定。", "执行 --help 查看用法；由执行者核对参数，不支持修复或重试选项。");
+}
+function validateData(data) {
+  const result = core.compute(data);
+  if (!result.ok) throw new ReviewError("ERR-OUT-03", 4, "审查 DATA 不符合契约，未生成报告。", "由执行者核对 messages 与 issues 指向的字段；用户仅补充业务事实，无需手写 JSON。", {
+    messages: result.errors || [],
+    issues: (result.issues || []).map(x => ({ path: x.path, message: x.message, code: x.code }))
+  });
+  return result;
+}
+function readInput(inputPath, io = fs) {
+  const file = path.resolve(inputPath);
+  const readError = error => new ReviewError("ERR-IN-01", 3, "无法读取审查 DATA JSON，输入必须是可读取的普通文件。", "由执行者核对输入路径、文件类型和读取权限；不改动原文件。", { path: file, systemCode: systemCode(error) });
+  const checkSize = size => {
+    if (size > MAX_INPUT_BYTES) throw new ReviewError("ERR-IN-02", 3, "统一审查 DATA JSON 超过 8 MiB 硬上限；这不是原始需求文档的容量限制。", "由执行者核对统一 DATA 的组织和大小；用户只需提供业务事实，不自动裁剪或拆分原材料。", { path: file, sizeBytes: size, maxInputBytes: MAX_INPUT_BYTES });
+  };
+  let info, bytes;
+  try { info = io.statSync(file); } catch (error) { throw readError(error); }
+  if (!info.isFile()) throw readError();
+  checkSize(info.size);
+  try { bytes = io.readFileSync(file); } catch (error) { throw readError(error); }
+  checkSize(bytes.length);
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) throw new ReviewError("ERR-IN-04", 3, "审查 DATA JSON 带有 UTF-8 BOM，本生成器明确拒绝该编码标记。", "由执行者另存 UTF-8 无 BOM 的 DATA 副本；未自动移除 BOM，未修改源文件。", { path: file });
+  let text;
+  try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes); }
+  catch (_) { throw new ReviewError("ERR-IN-03", 3, "审查 DATA JSON 不是有效 UTF-8，未替换或忽略非法字节。", "由执行者核对编码并另存有效 UTF-8 无 BOM 的 DATA 副本；用户无需手写 JSON。", { path: file }); }
+  let data;
+  try { data = JSON.parse(text); }
+  catch (_) { throw new ReviewError("ERR-IN-05", 3, "审查 DATA JSON 语法无效，未回显原文片段。", "由执行者用 JSON 校验工具核对语法；用户仅补充业务事实，无需手写 JSON。", { path: file }); }
+  return { data, path: file, sizeBytes: bytes.length };
+}
+function outputPlan(data, base, format = data?.format ?? "md+html") {
+  validateData(data);
+  if (!FORMATS.includes(format)) throw argumentError();
+  // 只在独立副本中记录生效格式，不改源对象，也不掩盖原 DATA 的契约错误。
+  const effective = structuredClone(data);
+  effective.format = format;
+  const entries = [];
+  if (format !== "md") entries.push({ path: base + ".html", content: renderHTML(effective) });
+  if (format !== "html") entries.push({ path: base + ".md", content: renderMarkdown(effective) });
   return entries;
 }
-function main(){
-  const args=process.argv.slice(2);
-  if(args[0]==="--templates"){
-    for(const kind of ["fast","deep"]){const file=path.join(root,"templates",kind==="fast"?"fast-screen-card.html":"deep-review-radar.html");fs.writeFileSync(file,renderHTML(demo(kind)),"utf8");console.log("TEMPLATE",file);}
-  }else if(args[0]==="--demo"&&args[1]){
-    const out=path.resolve(args[1]);if(!fs.statSync(out).isDirectory())throw new Error("输出目录不存在");
-    for(const kind of ["fast","deep"]){const data=demo(kind), base=path.join(out,"v2.4.0-"+kind+"-demo");writeNew(base+".html",renderHTML(data));writeNew(base+".md",renderMarkdown(data));writeNew(base+".json",core.safeJSON(data));console.log("DEMO",base);}
-  }else if(args.length>=2 && !args[0].startsWith("--")){
-    const data=JSON.parse(fs.readFileSync(path.resolve(args[0]),"utf8"));const base=path.resolve(args[1]);
-    const options=args.slice(2);let format;
-    if(options.length===0)format=data.format||"md+html";
-    else if(options.length===1&&options[0]==="--no-html")format="md";
-    else if(options.length===1&&/^(?:--)?format=/.test(options[0]))format=options[0].split("=")[1];
-    else if(options.length===2&&options[0]==="--format")format=options[1];
-    else throw new Error("未识别的生成参数；支持 --format md+html|md|html 或 --no-html");
-    const entries=outputPlan(data,base,format);
-    if(entries.some(x=>fs.existsSync(x.path)))throw new Error("输出已存在，请使用新的修订号文件名");
-    entries.forEach(x=>writeNew(x.path,x.content));console.log(JSON.stringify(core.compute(data),null,2));
-  }else{console.log("Usage: node build-review.js data.json output-basename [--format md+html|md|html | --no-html] | --demo existing-dir | --templates");process.exitCode=1;}
+const pathKey = file => process.platform === "win32" ? path.resolve(file).toLowerCase() : path.resolve(file);
+function preflightOutputs(entries, io, inputPath, maintenance = false) {
+  if (!Array.isArray(entries) || !entries.length || entries.some(x => !x || typeof x.path !== "string" || !x.path || typeof x.content !== "string")) {
+    throw new ReviewError("ERR-INT-01", 6, "输出计划无效，停止生成。", "由执行者核对生成器调用与版本；用户仅补充业务事实。");
+  }
+  const planned = entries.map(x => ({ path: path.resolve(x.path), content: x.content }));
+  const fail = (file, reason, error) => new ReviewError("ERR-OUT-01", 5, "输出预检未通过，未开始写入。", "由执行者核对目标路径、现有文件和父目录；普通生成不覆盖、不改名、不创建目录。", { path: file, reason, systemCode: systemCode(error), unattemptedFiles: planned.map(x => x.path) });
+  const inputs = new Set();
+  if (inputPath) {
+    inputs.add(pathKey(inputPath));
+    try { inputs.add(pathKey(io.realpathSync(inputPath))); }
+    catch (error) { throw fail(path.resolve(inputPath), "无法核对输入文件的真实路径", error); }
+  }
+  const seen = new Set();
+  for (const entry of planned) {
+    if (process.platform === "win32") {
+      const parts = entry.path.slice(path.parse(entry.path).root.length).split(/[\\/]/);
+      if (parts.some(part => /[<>:"|?*\x00-\x1f]/.test(part) || /[. ]$/.test(part) || /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(part))) {
+        throw fail(entry.path, "Windows 输出名称非法或为保留名称；不允许备用数据流");
+      }
+    }
+    const parent = path.dirname(entry.path);
+    let parentInfo, realParent;
+    try { parentInfo = io.statSync(parent); }
+    catch (error) { throw fail(parent, "目标父目录不存在或不可访问", error); }
+    if (!parentInfo.isDirectory()) throw fail(parent, "目标父路径不是目录");
+    try { realParent = io.realpathSync(parent); }
+    catch (error) { throw fail(parent, "无法核对目标父目录的真实路径", error); }
+    const key = pathKey(path.join(realParent, path.basename(entry.path)));
+    if (inputs.has(key) || inputs.has(pathKey(entry.path))) throw fail(entry.path, "输出目标不得与输入为同一路径");
+    if (seen.has(key)) throw fail(entry.path, "输出计划包含重复目标");
+    seen.add(key);
+    let existing;
+    try { existing = io.lstatSync(entry.path); }
+    catch (error) { if (error.code !== "ENOENT") throw fail(entry.path, "无法确认目标是否已存在", error); }
+    if (existing && (!maintenance || !existing.isFile() || existing.isSymbolicLink())) throw fail(entry.path, "输出目标已存在或不是可维护的普通模板文件");
+  }
+  return planned;
 }
-module.exports={renderHTML,renderMarkdown,demo,outputPlan};
-if(require.main===module)main();
+function writePrepared(planned, io, maintenance = false) {
+  const completedFiles = [];
+  for (let index = 0; index < planned.length; index++) {
+    const entry = planned[index];
+    let fd, created = false, failure, phase = "open";
+    try {
+      // 普通输出以 wx 独占创建；维护模式仅由 --templates 的固定两条路径调用。
+      fd = io.openSync(entry.path, maintenance ? "w" : "wx");
+      created = true;
+      phase = "write";
+      io.writeFileSync(fd, entry.content, { encoding: "utf8" });
+    } catch (error) { failure = error; }
+    if (fd !== undefined) {
+      try { io.closeSync(fd); }
+      catch (error) { if (!failure) { failure = error; phase = "close"; } }
+    }
+    if (!failure) {
+      phase = "readback";
+      try {
+        const actual = io.readFileSync(entry.path);
+        if (!Buffer.isBuffer(actual) || !actual.equals(Buffer.from(entry.content, "utf8"))) failure = new Error("读回内容不一致");
+      } catch (error) { failure = error; }
+    }
+    if (failure) {
+      const incompleteFiles = created ? [entry.path] : [];
+      throw new ReviewError(phase === "readback" ? "ERR-OUT-04" : "ERR-OUT-05", 5,
+        phase === "readback" ? "输出文件读回失败或内容不一致，不能认定整体成功。" : "输出写入未完成，不能认定整体成功。",
+        "由执行者核对 completedFiles 与 incompleteFiles；后者可能为空、截断或仅未通过读回验证。保留现有文件供核对，用户仅补充业务事实。",
+        { path: entry.path, phase, systemCode: systemCode(failure), completedFiles: [...completedFiles], incompleteFiles, untouchedFiles: created ? [] : [entry.path], unattemptedFiles: planned.slice(index + 1).map(x => x.path) },
+        "未自动修复、未重试；已停止后续写入。完整写入并读回确认 " + completedFiles.length + " 个；可能不完整或未验证 " + incompleteFiles.length + " 个。" + (completedFiles.length || incompleteFiles.length ? "存在部分产物，详见文件清单；" : "未产生输出文件；") + "未删除已写文件，未修改输入文件。");
+    }
+    completedFiles.push(entry.path);
+  }
+  return { completedFiles, incompleteFiles: [], unattemptedFiles: [] };
+}
+function writeOutputs(entries, { io = fs, inputPath } = {}) {
+  // 所有目标统一预检后才开始写入；每个目标仅执行一轮创建、写入、读回。
+  return writePrepared(preflightOutputs(entries, io, inputPath), io);
+}
+const HELP = `需求审查可视化生成器 v2.4.1
+用法：
+  node build-review.js data.json output-basename [--format md+html|md|html | --no-html | format=md]
+  node build-review.js --check data.json
+  node build-review.js --demo existing-dir
+  node build-review.js --templates
+  node build-review.js --help | -h | help
+
+默认生成 Markdown + HTML；显式格式覆盖有效 DATA.format，两份嵌入状态均记录生效格式，不修改输入。
+--check 只读检查 DATA 结构、大小和统计，不生成文件。
+输入仅接受严格 UTF-8 无 BOM；统一审查 DATA JSON 上限 8 MiB，与原始需求文档/原材料容量无关。
+普通生成及 --demo 禁止覆盖；父目录必须已存在；全量预检后以 wx 单次写入并读回核对。
+不自动修复、不重试、不换目录、不创建目录、不改名；写入中失败保留部分产物并停止后续写入。
+--templates 是维护命令：仅允许覆盖 templates/fast-screen-card.html 和 templates/deep-review-radar.html 这两个固定文件，不改变普通输出的禁覆盖规则。
+退出码：0 成功；2 参数；3 输入读取/编码/大小/JSON；4 DATA 契约；5 输出/读回；6 内部错误。
+错误 stderr JSON：code + message（发生什么）+ handled（已做处理）+ next（建议下一步）+ details。
+`;
+function parseArgs(args) {
+  if (args.length === 1 && ["--help", "-h", "help"].includes(args[0])) return { mode: "help" };
+  if (args[0] === "--templates" && args.length === 1) return { mode: "templates" };
+  const positional = x => typeof x === "string" && x.length > 0 && !x.startsWith("-") && !x.startsWith("format=");
+  if (["--check", "--demo"].includes(args[0]) && args.length === 2 && positional(args[1])) return { mode: args[0].slice(2), input: args[1] };
+  if (args.length < 2 || !positional(args[0]) || !positional(args[1]) || args[0] === "help") throw argumentError();
+  const options = args.slice(2);
+  let format;
+  if (options.length === 1 && options[0] === "--no-html") format = "md";
+  else if (options.length === 1 && /^(?:--)?format=/.test(options[0])) format = options[0].slice(options[0].indexOf("=") + 1);
+  else if (options.length === 2 && options[0] === "--format") format = options[1];
+  else if (options.length) throw argumentError();
+  if (format !== undefined && !FORMATS.includes(format)) throw argumentError();
+  return { mode: "generate", input: args[0], base: args[1], format };
+}
+function resultSummary(data, result) {
+  return { kind: data.kind, limited:result.limited, warnings:result.warnings, checkCount: result.checks.length, findingCount: result.findings.length, pendingCount: result.open.length, confirmedCount: result.closed.length, count: result.count, level: result.level, verdict: result.verdict, score: result.score, rate: result.rate };
+}
+function runCLI(args) {
+  const command = parseArgs(args);
+  if (command.mode === "help") return HELP;
+  if (command.mode === "templates") {
+    const entries = ["fast", "deep"].map(kind => ({ path: path.join(root, "templates", kind === "fast" ? "fast-screen-card.html" : "deep-review-radar.html"), content: renderHTML({ ...demo(kind), format: "md+html" }) }));
+    return { ok: true, mode: "templates", maintenance: "仅覆盖固定两个模板；普通生成仍禁止覆盖。", ...writePrepared(preflightOutputs(entries, fs, undefined, true), fs, true) };
+  }
+  if (command.mode === "demo") {
+    const out = path.resolve(command.input);
+    const entries = ["fast", "deep"].flatMap(kind => {
+      const data = { ...demo(kind), format: "md+html" };
+      const base = path.join(out, "v2.4.1-" + kind + "-demo");
+      return [...outputPlan(data, base), { path: base + ".json", content: core.safeJSON(data) }];
+    });
+    return { ok: true, mode: "demo", effectiveFormat: "md+html", ...writeOutputs(entries) };
+  }
+  const input = readInput(command.input);
+  const result = validateData(input.data);
+  const summary = { ok: true, mode: command.mode, sizeBytes: input.sizeBytes, maxInputBytes: MAX_INPUT_BYTES, limitScope: "统一审查 DATA JSON；与原始文档容量无关", ...resultSummary(input.data, result) };
+  if (command.mode === "check") return { ...summary, completedFiles: [], incompleteFiles: [], unattemptedFiles: [] };
+  const format = command.format ?? input.data.format ?? "md+html";
+  const entries = outputPlan(input.data, path.resolve(command.base), format);
+  return { ...summary, effectiveFormat: format, ...writeOutputs(entries, { inputPath: input.path }) };
+}
+function main(args = process.argv.slice(2), streams = process) {
+  let result;
+  try {
+    result = runCLI(args);
+    streams.stdout.write(typeof result === "string" ? result : JSON.stringify(result, null, 2) + "\n");
+    return 0;
+  } catch (error) {
+    const completedFiles = result?.completedFiles || [];
+    const report = error instanceof ReviewError ? error : new ReviewError("ERR-INT-01", 6, "生成器发生未预期内部错误，未输出原始异常或堆栈。", "由执行者核对生成器与审查引擎版本，并使用脱敏数据定位；用户仅补充业务事实。", { completedFiles }, completedFiles.length ? "未自动修复、未重试；全部输出已写入并读回确认，无不完整文件，但成功结果反馈失败。未删除输出，未修改输入文件。" : NO_WRITE);
+    streams.stderr.write(JSON.stringify(report.toJSON(), null, 2) + "\n");
+    return report.exitCode;
+  }
+}
+module.exports = { renderHTML, renderMarkdown, demo, outputPlan, writeOutputs, readInput, main, MAX_INPUT_BYTES, ReviewError };
+if (require.main === module) process.exitCode = main();
