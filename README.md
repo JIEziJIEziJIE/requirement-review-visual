@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/JIEziJIEziJIE/requirement-review-visual/main/assets/icon.png" width="160" height="160" alt="需求审查可视化版图标"></p>
+<p align="center"><img src="https://cdn.jsdelivr.net/gh/JIEziJIEziJIE/requirement-review-visual@022bd90dd56ffefe458b3682eb42ba601019add8/assets/icon.png" width="160" height="160" alt="需求审查可视化版图标"></p>
 
 # 需求审查可视化版 · 使用说明
 
